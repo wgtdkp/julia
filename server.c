@@ -1,3 +1,4 @@
+#define _XOPEN_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/mman.h>
@@ -30,8 +31,10 @@
  any resource that out of this directory
  is not available;
 */
-static char default_file[] = "index.html";
-static char www_dir[255];
+// TODO(wgtdkp): make them configurable
+static char default_index[] = "index.html";
+static char default_404[] = "404.html";
+static char www_dir[] = "/home/wgtdkp/julia/www";
 static char http_version[2] = {1, 1};   // http/1.1
 
 typedef enum {
@@ -77,7 +80,6 @@ typedef struct {
     //the abs path to the resource
     char path[255];
     int path_len;
-    int size;
     //type: static file or script
     ResourceType type;
     //the status of the resource
@@ -106,12 +108,18 @@ typedef struct {
     int content_length;
     MediaType content_type;
     MediaType content_subtype;
-} ResponseHeader;
-
-typedef struct {
-    ResponseHeader header;
-    char* content;
+    int content_fd;
 } Response;
+
+static const Response default_response = {
+    .status = 200,
+    /* .content_encode = 0, */
+    .content_length = 0,
+    .content_type = MT_TEXT,
+    .content_subtype = MT_HTML,
+    .content_fd = -1
+};
+
 
 static int get_line(int client, char* buf, int size);
 static inline int empty_line(char* line, int len);
@@ -126,12 +134,12 @@ static int parse_request_header(int client, Request* request);
 static int parse_uri(char* sbegin, char* send, Request* request, Resource* resource);
 static int fill_resource(Resource* resource, char* begin, char* end);
 static void* handle_request(void* args);
-static int handle_get(int client, Request* request, Resource* resource);
-static int handle_post(int client, Request* request, Resource* resource);
+static int handle_static(int client, Request* request, Resource* resource);
 static int put_response(int client, Response* response);
 static int startup(unsigned short* port);
 static const char* status_repr(int status);
 static const char* content_type_repr(MediaType type);
+static void setup_env(Request* request);
 
 static inline int is_static(ResourceType type)
 {
@@ -357,8 +365,8 @@ check:
          *is ok to cat '/' to path, even if path is ended by '/'
          */
         strcat(resource->path, "/");
-        strcat(resource->path, default_file);
-        resource->path_len += 1 + strlen(default_file);
+        strcat(resource->path, default_index);
+        resource->path_len += 1 + strlen(default_index);
         goto check;
     } else { //resource is a file
         end = &resource->path[resource->path_len - 1];
@@ -368,8 +376,8 @@ check:
         }
         resource->type = get_type(end + 1);
     }
-    if (resource->stat != RS_NOTFOUND)
-        resource->size = st.st_size;
+    //if (resource->stat != RS_NOTFOUND)
+    //    resource->size = st.st_size;
 
     return 0;
 }
@@ -423,84 +431,66 @@ static int get_line(int client, char* buf, int size)
     return i;
 }
 
-static int handle_get(int client, Request* request, Resource* resource)
+static int handle_static(int client, Request* request, Resource* resource)
 {
-    int fd = -1;
-    Response response;
-    ResponseHeader* header = &response.header;
-    assert(request->method == M_GET);
-    if (is_static(resource->type)) {
-        DEBUG("is static");
-        // return static resource to client
-        // TODOwgtdkp): support more types and subtypes
-        switch (resource->type) {
-        case RT_TEXT:
-            header->content_type = MT_TEXT;
-            header->content_subtype = MT_HTML;
-            break;
-        case RT_IMG:
-            header->content_type = MT_IMG;
-            header->content_subtype = MT_PNG;
-            break;
-        default: // response html page default
-            header->content_type = MT_TEXT;
-            header->content_subtype = MT_HTML;
-            break;
-        }
+    assert(is_static(resource->type));
+    DEBUG("is static");
 
-        switch(resource->stat) {
-        case RS_OK:
-            DEBUG("RS_OK"); 
-            header->status = 200;
-            header->content_length = resource->size;
-            fd = open(resource->path, O_RDONLY, 00777);
-            assert(fd != -1);
-            response.content = (char*)mmap(NULL, 
-                                        header->content_length, 
-                                        PROT_READ, 
-                                        MAP_SHARED, 
-                                        fd, 
-                                        0);
-            break;
-        case RS_NOTFOUND:
-            DEBUG("RS_NOT_FOUND");
-            header->status = 404;
-            break;
-        case RS_DENIED:
-            DEBUG("RS_DENIED");
-            header->status = 403;
-            break;
-        default:
-            header->status = 404;
-            break;
-        }
-
-        put_response(client, &response);
-    } else {
-        // TODO(wgtdkp): handle over to CGI
-
-        assert(0);
+    Response response = default_response;
+    // TODOwgtdkp): support more types and subtypes
+    switch (resource->type) {
+    case RT_TEXT:
+        response.content_type = MT_TEXT;
+        response.content_subtype = MT_HTML;
+        break;
+    case RT_IMG:
+        response.content_type = MT_IMG;
+        response.content_subtype = MT_PNG;
+        break;
+    default: // response html page default
+        response.content_type = MT_TEXT;
+        response.content_subtype = MT_HTML;
+        break;
     }
 
-    // release content
+    switch(resource->stat) {
+    case RS_OK:
+        DEBUG("RS_OK"); 
+        response.status = 200;
+        response.content_fd = open(resource->path, O_RDONLY, 00777);
+        assert(response.content_fd != -1);
+        break;
+    case RS_DENIED:
+        DEBUG("RS_DENIED");
+        response.status = 403;
+        // TODO(wgtdkp): setup denied page
+        break;
+    case RS_NOTFOUND:
+    default:
+        DEBUG("RS_NOT_FOUND");
+        response.status = 404;
+        response.content_fd = open(default_404, O_RDONLY, 00777);
+        assert(response.content_fd != -1);
+        break;
+    }
+
+    // setup content length
+    int fd = response.content_fd;
     if (fd != -1) {
-        close(fd);
-        munmap(response.content, header->content_length);
+        lseek(fd, 0, SEEK_SET);
+        response.content_length = lseek(fd, 0, SEEK_END);
+        lseek(fd, 0, SEEK_SET);
     }
-    return 0;
-}
-
-static int handle_static(int client, Reuqest* request, Resource* source)
-{
-
+    put_response(client, &response);
 }
 
 static int handle_cgi(int client, Request* request, Resource* resource)
 {
+    assert(is_script(resource->type));
     int pid;
     int input[2];
     int output[2];
-
+    DEBUG("");
     if (pipe(output) < 0) {
         // TODO(wgtdkp): error
     }
@@ -514,92 +504,95 @@ static int handle_cgi(int client, Request* request, Resource* resource)
     if (pid == 0) { // child, execute the cgi
         close(input[1]);
         close(output[0]);
-        char buf[255];
-        sprintf(buf, "REQUEST_METHOD=%s", method_repr(request->method));
-        putenv(buf);
-        if (request->method == M_GET) {
-            sprintf(buf, "QUERY_STRING=%s", request->args);
-            putenv(buf);
-        } else if (request->mothod == M_POST) {
-            sprintf(buf, "CONTENT_LENGTH=%d", request->content_length);
-            putenv(buf);
-        }
+        // setup enviroment
+        setup_env(request);
         // TODO(WGTDKP): handle more request
-        execl("php-cgi", "php-cgi %s", resource->path);
+        execl("php5-cgi", "php5-cgi %s", resource->path);
         exit(0);
     } else {
         close(input[0]);
         close(output[1]);
+        char ch;
+        if (request->method == M_POST) {
+            for (int i = 0; i < request->content_length; i++) {
+                recv(client, &ch, 1, 0);
+                write(input[1], &ch, 1);
+            }
+        }
+        while (read(output[0], &ch, 1) > 0)
+            send(client, &ch, 1, 0);
         
+        close(output[0]);
+        close(input[1]);
+        int status;
+        waitpid(pid, &status, 0);
     }
 }
 
 static void setup_env(Request* request)
 {
-
+    char buf[255];
+    sprintf(buf, "REQUEST_METHOD=%s", method_repr(request->method));
+    putenv(buf);
+    if (request->method == M_GET) {
+        sprintf(buf, "QUERY_STRING=%s", request->args);
+        putenv(buf);
+    } else if (request->method == M_POST) {
+        sprintf(buf, "CONTENT_LENGTH=%d", request->content_length);
+        putenv(buf);
+    }
 }
 
 static int put_response(int client, Response* response)
 {
     char begin[1024];
     char* buf = begin;
-    ResponseHeader* header = &response->header;
     buf += sprintf(buf, "HTTP/%1d.%1d %3d %s \r\n", 
             http_version[0],
             http_version[1],
-            header->status,
-            status_repr(header->status));
-    if (header->status == 200) {
+            response->status,
+            status_repr(response->status));
+
+    if (response->content_fd != -1) {
         buf += sprintf(buf, "Contend-Type: %s/%s \r\n",
-                content_type_repr(header->content_type),
-                content_type_repr(header->content_subtype));
+                content_type_repr(response->content_type),
+                content_type_repr(response->content_subtype));
         buf += sprintf(buf, "Content-Length: %d \r\n",
-                header->content_length);
+                response->content_length);
     }
+
     buf += sprintf(buf, "\r\n");
+
     send(client, begin, buf - begin, 0);
-    send(client, response->content, header->content_length, 0); 
+    if (response->content_fd != -1) {
+        char* addr = (char*)mmap(NULL, 
+                response->content_length, 
+                PROT_READ, 
+                MAP_SHARED, 
+                response->content_fd, 
+                0);
+        send(client, addr, response->content_length, 0); 
+    }
     return 0;
 }
-
-static int handle_post(int client, Request* request, Resource* resource)
-{
-    assert(request->method == M_POST);
-    return 0;
-}
-
-/*
-static void read_buffer(int client, Buffer* buf)
-{
-
-}
-*/
 
 static void* handle_request(void* args)
 {
     int client = *((int*)args);
-    Buffer* request_buf = create_buffer(100);
+    //Buffer* request_buf = create_buffer(100);
     Request* request = create_request();
     Resource* resource = create_resource();
     parse_request_line(client, request, resource);
     parse_request_header(client, request);
-    
-    if (request->method == M_POST) {
-        // TODO(wgtdkp): read content
 
-    }
-
-    if (request->method == M_GET) {
-        DEBUG("handle get...");
-        handle_get(client, request, resource);
-    } else if (request->method == M_POST) {
-        handle_post(client, request, resource);
+    if (is_static(resource->type)) {
+        handle_static(client, request, resource);
     } else {
-        // TODO(wgtdkp): handle more request
+        handle_cgi(client, request, resource);
     }
+
     destroy_resource(&resource);
     destroy_request(&request);
-
     close(client);
 }
 
@@ -617,8 +610,6 @@ static const char* content_type_repr(MediaType type)
 #       include "content_type.inc"
     }
 }
-
-
 
 static int startup(unsigned short* port)
 {
@@ -654,7 +645,7 @@ static int startup(unsigned short* port)
 
 static int config(void)
 {
-    strcpy(www_dir, "/home/wgtdkp/www");
+    //strcpy(www_dir, "/home/wgtdkp/www");
     return 0;
 }
 
