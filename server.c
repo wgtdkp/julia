@@ -437,7 +437,7 @@ static int handle_static(int client, Request* request, Resource* resource)
     DEBUG("is static");
 
     Response response = default_response;
-    // TODOwgtdkp): support more types and subtypes
+    // TODO(wgtdkp): support more types and subtypes
     switch (resource->type) {
     case RT_TEXT:
         response.content_type = MT_TEXT;
@@ -490,7 +490,7 @@ static int handle_cgi(int client, Request* request, Resource* resource)
     int pid;
     int input[2];
     int output[2];
-    DEBUG("");
+    DEBUG("is script");
     if (pipe(output) < 0) {
         // TODO(wgtdkp): error
     }
@@ -506,7 +506,7 @@ static int handle_cgi(int client, Request* request, Resource* resource)
         close(output[0]);
         // setup enviroment
         setup_env(request);
-        // TODO(WGTDKP): handle more request
+        // TODO(wgtdkp): handle more request
         execl("php5-cgi", "php5-cgi %s", resource->path);
         exit(0);
     } else {
@@ -562,16 +562,18 @@ static int put_response(int client, Response* response)
     }
 
     buf += sprintf(buf, "\r\n");
-
     send(client, begin, buf - begin, 0);
+    fprintf(stderr, "%d\n", response->content_fd);
     if (response->content_fd != -1) {
-        char* addr = (char*)mmap(NULL, 
+        char* content = (char*)mmap(NULL, 
                 response->content_length, 
                 PROT_READ, 
                 MAP_SHARED, 
                 response->content_fd, 
                 0);
-        send(client, addr, response->content_length, 0); 
+        for (int i = 0; i < response->content_length; i++)
+            fprintf(stderr, "%c", content[i]);
+        send(client, content, response->content_length, 0); 
     }
     return 0;
 }
