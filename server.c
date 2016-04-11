@@ -55,6 +55,8 @@ typedef struct {
     //entities
     char* host;
     int host_len;
+
+    int content_length;
 } Request;
 
 typedef enum {
@@ -221,6 +223,21 @@ static int get_method(char* str, int len)
     }
 }
 
+static const char* method_repr(Method method)
+{
+    switch (method) {
+    case M_GET: return "GET";
+    case M_POST: return "POST";
+    case M_OPTIONS: return "OPTIONS";
+    case M_HEAD: return "HEAD";
+    case M_CONNECT: return "CONNECT";
+    case M_TRACE: return "TRACE";
+    case M_DELETE: return "DELETE";
+    case M_PUT: return "PUT";
+    default: return "*";
+    }
+}
+
 //return error
 static int parse_request_line(int client, Request* request, Resource* resource)
 {
@@ -257,6 +274,10 @@ static int parse_request_header(int client, Request* request)
             WALK(begin, end);   //skip ':'
             WALK(begin, end);
             request->host = dup_tok(begin, end);
+        } else if (0 == strncasecmp("Content-Length", begin, end - begin)) {
+            WALK(begin, end);   //skip ':'
+            WALK(begin, end);
+            request->content_length = atoi(begin);
         }
         //TODO(wgtdkp): handle other header entities
     }
@@ -457,6 +478,7 @@ static int handle_get(int client, Request* request, Resource* resource)
         put_response(client, &response);
     } else {
         // TODO(wgtdkp): handle over to CGI
+
         assert(0);
     }
 
@@ -466,6 +488,55 @@ static int handle_get(int client, Request* request, Resource* resource)
         munmap(response.content, header->content_length);
     }
     return 0;
+}
+
+static int handle_static(int client, Reuqest* request, Resource* source)
+{
+
+}
+
+static int handle_cgi(int client, Request* request, Resource* resource)
+{
+    int pid;
+    int input[2];
+    int output[2];
+
+    if (pipe(output) < 0) {
+        // TODO(wgtdkp): error
+    }
+    if (pipe(input) < 0) {
+        // TODO(wgtdkp): error
+    }
+    if ((pid = fork()) < 0) {
+        // TODO(wgtdkp): error
+    }
+
+    if (pid == 0) { // child, execute the cgi
+        close(input[1]);
+        close(output[0]);
+        char buf[255];
+        sprintf(buf, "REQUEST_METHOD=%s", method_repr(request->method));
+        putenv(buf);
+        if (request->method == M_GET) {
+            sprintf(buf, "QUERY_STRING=%s", request->args);
+            putenv(buf);
+        } else if (request->mothod == M_POST) {
+            sprintf(buf, "CONTENT_LENGTH=%d", request->content_length);
+            putenv(buf);
+        }
+        // TODO(WGTDKP): handle more request
+        execl("php-cgi", "php-cgi %s", resource->path);
+        exit(0);
+    } else {
+        close(input[0]);
+        close(output[1]);
+        
+    }
+}
+
+static void setup_env(Request* request)
+{
+
 }
 
 static int put_response(int client, Response* response)
@@ -497,14 +568,27 @@ static int handle_post(int client, Request* request, Resource* resource)
     return 0;
 }
 
+/*
+static void read_buffer(int client, Buffer* buf)
+{
+
+}
+*/
+
 static void* handle_request(void* args)
 {
     int client = *((int*)args);
+    Buffer* request_buf = create_buffer(100);
     Request* request = create_request();
     Resource* resource = create_resource();
     parse_request_line(client, request, resource);
     parse_request_header(client, request);
     
+    if (request->method == M_POST) {
+        // TODO(wgtdkp): read content
+
+    }
+
     if (request->method == M_GET) {
         DEBUG("handle get...");
         handle_get(client, request, resource);
