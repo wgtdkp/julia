@@ -459,20 +459,17 @@ static int handle_static(int client, Request* request, Resource* resource)
 
     switch(resource->stat) {
     case RS_OK:
-        DEBUG("RS_OK"); 
         response.status = 200;
         response.content_fd = open(resource->path, O_RDONLY, 00777);
         assert(response.content_fd != -1);
         break;
     case RS_DENIED:
-        DEBUG("RS_DENIED");
         response.status = 403;
         // TODO(wgtdkp): setup denied page
         response.content_fd = open(default_403, O_RDONLY, 00777);
         break;
     case RS_NOTFOUND:
     default:
-        DEBUG("RS_NOT_FOUND");
         response.status = 404;
         // TODO(wgtdkp): bug: default_404 is just an relative path!
         response.content_fd = open(default_404, O_RDONLY, 00777);
@@ -518,12 +515,13 @@ static int handle_cgi(int client, Request* request, Resource* resource)
         DEBUG("fork error");
     }
 
+
     if (pid == 0) { // child, execute the cgi
         close(input[1]);
         close(output[0]);
         // setup enviroment
         setup_env(request);
-        // TODO(wgtdkp): handle more request
+        // TODO(wgtdkp): handle more scripts
         execl("php5-cgi", "php5-cgi %s", resource->path);
         exit(0);
     } else {
@@ -544,6 +542,7 @@ static int handle_cgi(int client, Request* request, Resource* resource)
         int status;
         waitpid(pid, &status, 0);
     }
+    return output[0];
 }
 
 static void setup_env(Request* request)
@@ -558,6 +557,17 @@ static void setup_env(Request* request)
         sprintf(buf, "CONTENT_LENGTH=%d", request->content_length);
         putenv(buf);
     }
+}
+
+static void cat(int client, int fd)
+{
+    static const int buf_size = 200 * 1024;
+    char buf[buf_size];
+    int len;
+    do {
+        len = read(fd, buf, buf_size);
+        write(client, buf, len);
+    } while (len == buf_size);
 }
 
 static int put_response(int client, Response* response)
@@ -576,8 +586,8 @@ static int put_response(int client, Response* response)
         buf += sprintf(buf, "Contend-Type: %s/%s \r\n",
                 content_type_repr(response->content_type),
                 content_type_repr(response->content_subtype));
-        buf += sprintf(buf, "Content-Length: %d \r\n",
-                response->content_length);
+        //buf += sprintf(buf, "Content-Length: %d \r\n",
+        //        response->content_length);
     }
 
     buf += sprintf(buf, "\r\n");
@@ -587,6 +597,12 @@ static int put_response(int client, Response* response)
      * send content, if has
      */
     if (response->content_fd != -1) {
+        cat(client, response->content_fd);
+        //char ch;
+        //while (1 == read(response->content_fd, &ch, 1)) {
+        //    send(client, &ch, 1, 0);
+        //}
+        /*
         char* content = (char*)mmap(NULL, 
                 response->content_length, 
                 PROT_READ, 
@@ -596,6 +612,7 @@ static int put_response(int client, Response* response)
         //for (int i = 0; i < response->content_length; i++)
         //    fprintf(stderr, "%c", content[i]);
         send(client, content, response->content_length, 0); 
+        */
     }
     return 0;
 }
@@ -609,15 +626,69 @@ static void* handle_request(void* args)
     parse_request_line(client, request, resource);
     parse_request_header(client, request);
 
+    /*
     if (is_static(resource->type)) {
         handle_static(client, request, resource);
     } else {
         handle_cgi(client, request, resource);
     }
+    */
+    Response response = default_response;
+    // TODO(wgtdkp): support more types and subtypes
+    switch (resource->type) {
+    case RT_PHP:
+    case RT_PY: // not supported now
+    case RT_TEXT:
+        response.content_type = MT_TEXT;
+        response.content_subtype = MT_HTML;
+        break;
+    case RT_IMG:
+        response.content_type = MT_IMG;
+        response.content_subtype = MT_PNG;
+        break;
+    default: // response html page default
+        response.content_type = MT_TEXT;
+        response.content_subtype = MT_HTML;
+        break;
+    }
+
+    switch(resource->stat) {
+    case RS_OK:
+        response.status = 200;
+        if (is_static(resource->type))
+            response.content_fd = open(resource->path, O_RDONLY, 00777);
+        else
+            response.content_fd = handle_cgi(client, request, resource);
+        assert(response.content_fd != -1);
+        break;
+    case RS_DENIED:
+        response.status = 403;
+        // TODO(wgtdkp): setup denied page
+        response.content_fd = open(default_403, O_RDONLY, 00777);
+        break;
+    case RS_NOTFOUND:
+    default:
+        response.status = 404;
+        // TODO(wgtdkp): bug: default_404 is just an relative path!
+        response.content_fd = open(default_404, O_RDONLY, 00777);
+
+        //assert(response.content_fd != -1);
+        break;
+    }
+
+    // send response
+    put_response(client, &response);
+
+    // release resource
+    if (response.content_fd != -1) {
+        int err = close(response.content_fd);
+        assert(err == 0);
+    }
 
     destroy_resource(&resource);
     destroy_request(&request);
     close(client);
+    DEBUG("conenction closed");
 }
 
 static const char* status_repr(int status)
