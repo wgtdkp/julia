@@ -492,7 +492,10 @@ static int handle_static(int client, Request* request, Resource* resource)
     put_response(client, &response);
 
     // release resource
-    close(response.content_fd);
+    if (response.content_fd != -1) {
+        int err = close(response.content_fd);
+        assert(err == 0);
+    }
 }
 
 static int handle_cgi(int client, Request* request, Resource* resource)
@@ -504,12 +507,15 @@ static int handle_cgi(int client, Request* request, Resource* resource)
     DEBUG("is script");
     if (pipe(output) < 0) {
         // TODO(wgtdkp): error
+        DEBUG("pipe(output) error");
     }
     if (pipe(input) < 0) {
         // TODO(wgtdkp): error
+        DEBUG("pipe(input) error");
     }
     if ((pid = fork()) < 0) {
         // TODO(wgtdkp): error
+        DEBUG("fork error");
     }
 
     if (pid == 0) { // child, execute the cgi
