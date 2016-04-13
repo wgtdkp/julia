@@ -34,6 +34,7 @@
 // TODO(wgtdkp): make them configurable
 static char default_index[] = "index.html";
 static char default_404[] = "404.html";
+static char default_403[] = "403.html";
 static char www_dir[] = "/home/wgtdkp/julia/www";
 static char http_version[2] = {1, 1};   // http/1.1
 
@@ -324,20 +325,20 @@ static int fill_resource(Resource* resource, char* sbegin, char* send)
         sbegin = "/";
         send = sbegin + 1;
     }
-    //TODO(wgtdkp): check if token(begin, end) too long
+    //TODO(wgtdkp): check if token(begin, end) is too long
     resource->path_len = 
         tokcat(resource->path, resource->path_len, sbegin, send);
 
     char* begin = sbegin;
     char* end = sbegin;
     /*
-     *skip the first '/'(there is always '/' at the beginning)
+     * skip the first '/'(there is always '/' at the beginning)
      */
     WALK_UNTIL(end, '/');
     begin = ++end;
     /*
-     *check if request resource out of www_dir,
-     *that is: the '../' is more than other entries(except './') until now.
+     * check if request resource out of www_dir,
+     * that is: the '../' is more than other entries(except './') until now.
      */
     int ddots = 0, dentries = 0;
     while (1) {
@@ -362,7 +363,8 @@ check:
         resource->stat = RS_NOTFOUND;
     } else if (S_ISDIR(st.st_mode)) {
         /*
-         *is ok to cat '/' to path, even if path is ended by '/'
+         * it's ok to cat '/' to path, 
+         * even if path is ended by '/'
          */
         strcat(resource->path, "/");
         strcat(resource->path, default_index);
@@ -371,17 +373,19 @@ check:
     } else { //resource is a file
         end = &resource->path[resource->path_len - 1];
         while (*end != '.' && *end != '/') --end;
-        if (*end == '/') {
-            // TODO(wgtdkp): error: bad request
+        if (*end == '/') { 
+            /*
+             * the file request has no extension,
+             * treat it as usual file
+             */
+            resource->type = RT_FILE;
+        } else {
+            resource->type = get_type(end + 1);
         }
-        resource->type = get_type(end + 1);
     }
-    //if (resource->stat != RS_NOTFOUND)
-    //    resource->size = st.st_size;
 
     return 0;
 }
-
 
 //return: error
 static int parse_uri(char* sbegin, char* send, Request* request, Resource* resource)
@@ -464,13 +468,15 @@ static int handle_static(int client, Request* request, Resource* resource)
         DEBUG("RS_DENIED");
         response.status = 403;
         // TODO(wgtdkp): setup denied page
+        response.content_fd = open(default_403, O_RDONLY, 00777);
         break;
     case RS_NOTFOUND:
     default:
         DEBUG("RS_NOT_FOUND");
         response.status = 404;
+        // TODO(wgtdkp): bug: default_404 is just an relative path!
         response.content_fd = open(default_404, O_RDONLY, 00777);
-        assert(response.content_fd != -1);
+        //assert(response.content_fd != -1);
         break;
     }
 
@@ -481,7 +487,12 @@ static int handle_static(int client, Request* request, Resource* resource)
         response.content_length = lseek(fd, 0, SEEK_END);
         lseek(fd, 0, SEEK_SET);
     }
+
+    // send response
     put_response(client, &response);
+
+    // release resource
+    close(response.content_fd);
 }
 
 static int handle_cgi(int client, Request* request, Resource* resource)
@@ -552,7 +563,9 @@ static int put_response(int client, Response* response)
             http_version[1],
             response->status,
             status_repr(response->status));
-
+    /*
+     * if has content
+     */
     if (response->content_fd != -1) {
         buf += sprintf(buf, "Contend-Type: %s/%s \r\n",
                 content_type_repr(response->content_type),
@@ -563,7 +576,10 @@ static int put_response(int client, Response* response)
 
     buf += sprintf(buf, "\r\n");
     send(client, begin, buf - begin, 0);
-    fprintf(stderr, "%d\n", response->content_fd);
+    
+    /*
+     * send content, if has
+     */
     if (response->content_fd != -1) {
         char* content = (char*)mmap(NULL, 
                 response->content_length, 
@@ -571,8 +587,8 @@ static int put_response(int client, Response* response)
                 MAP_SHARED, 
                 response->content_fd, 
                 0);
-        for (int i = 0; i < response->content_length; i++)
-            fprintf(stderr, "%c", content[i]);
+        //for (int i = 0; i < response->content_length; i++)
+        //    fprintf(stderr, "%c", content[i]);
         send(client, content, response->content_length, 0); 
     }
     return 0;
