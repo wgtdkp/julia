@@ -33,10 +33,29 @@
 */
 // TODO(wgtdkp): make them configurable
 static char default_index[] = "index.html";
-static char default_404[] = "404.html";
-static char default_403[] = "403.html";
+static char default_404[] = "/home/wgtdkp/julia/www/404.html";
+static char default_403[] = "/home/wgtdkp/julia/www/403.html";
 static char www_dir[] = "/home/wgtdkp/julia/www";
 static char http_version[2] = {1, 1};   // http/1.1
+
+static const char* ext_map[][2] = {
+    {"css",     "text/css"},
+    {"htm",     "text/html"},
+    {"html",    "text/html"},
+    {"gif",     "image/gif"},
+    {"ico",     "image/x-icon"},
+    {"jpeg",    "image/jpeg"},
+    {"jpg",     "image/jpeg"},
+    {"svg",     "image/svg+xml"},
+    {"txt",     "text/plain"},
+};
+static const size_t ext_num = sizeof(ext_map) / sizeof(ext_map[0]);
+
+typedef struct {
+    int cap;
+    int size;
+    char* data;
+} String;
 
 typedef enum {
     M_GET,
@@ -64,14 +83,6 @@ typedef struct {
 } Request;
 
 typedef enum {
-    RT_FILE,
-    RT_TEXT,
-    RT_IMG,
-    RT_PHP,
-    RT_PY,
-} ResourceType;
-
-typedef enum {
     RS_OK,
     RS_NOTFOUND,
     RS_DENIED, //resource access denied
@@ -82,21 +93,16 @@ typedef struct {
     char path[255];
     int path_len;
     //type: static file or script
-    ResourceType type;
+    //ResourceType type;
     //the status of the resource
     ResourceStat stat;
 } Resource;
 
-typedef struct {
-    char* begin;
-    char* end;
-    char need_free;
-} String;
-
-
 typedef enum {
     MT_TEXT,
     MT_HTML,
+    MT_CSS,
+    MT_PLAIN,
     /* image */
     MT_IMG,
     MT_PNG,
@@ -105,20 +111,16 @@ typedef enum {
 
 typedef struct {
     int status;
-    int content_encode;
-    int content_length;
-    MediaType content_type;
-    MediaType content_subtype;
+    const char* content_type;
     int content_fd;
+    int is_script;
 } Response;
 
 static const Response default_response = {
     .status = 200,
-    /* .content_encode = 0, */
-    .content_length = 0,
-    .content_type = MT_TEXT,
-    .content_subtype = MT_HTML,
-    .content_fd = -1
+    .content_type = "text/html",
+    .content_fd = -1,
+    .is_script = 0
 };
 
 
@@ -136,20 +138,60 @@ static int parse_uri(char* sbegin, char* send, Request* request, Resource* resou
 static int fill_resource(Resource* resource, char* begin, char* end);
 static void* handle_request(void* args);
 static int handle_static(int client, Request* request, Resource* resource);
-static int put_response(int client, Response* response);
+static int put_response(int client, Request* request, Resource* resource, Response* response);
 static int startup(unsigned short* port);
 static const char* status_repr(int status);
-static const char* content_type_repr(MediaType type);
 static void setup_env(Request* request);
+static void cat(int client, int fd);
+static const char* get_type(const char* ext);
 
-static inline int is_static(ResourceType type)
+static String* create_string(int c);
+static String* destroy_string(String** str);
+static void string_push_back(String* str, char ch);
+
+// param: c: reserve c  bytes
+String* create_string(int c)
 {
-    return type < RT_PHP;
+    String* str = (String*)malloc(sizeof(String));
+    str->size = 0;
+    if (c == 0)
+        str->data = NULL;
+    str->data = (char*)malloc(c * sizeof(char));
+    str->cap = c;
+    return str;
 }
 
-static inline int is_script(ResourceType type)
+String* destroy_string(String** str)
 {
-    return !is_static(type);
+    free((*str)->data);
+    free(*str);
+    *str = 0;
+}
+
+void string_push_back(String* str, char ch)
+{
+    if (str->size >= str->cap - 1) {
+        int new_cap = str->cap * 2;
+        char* new_data = (char*)malloc(new_cap * sizeof(char));
+        if (str->size != 0)
+            memcpy(new_data, str->data, str->size);
+        new_data[str->size++] = ch;
+        new_data[str->size] = 0;
+        free(str->data);
+        str->data = new_data;
+        str->cap = new_cap;
+        ++str->size;
+    } else {
+        str->data[str->size++] = ch;
+        str->data[str->size] = 0;
+    }
+}
+
+static inline int is_script(const char* ext)
+{
+    if (strncasecmp("php", ext, 3) == 0)
+        return 1;
+    return 0;
 }
 
 static Request* create_request(void)
@@ -179,7 +221,6 @@ static Resource* create_resource(void)
     Resource* res = (Resource*)malloc(sizeof(Resource));
     strcpy(res->path, www_dir);
     res->path_len = strlen(res->path);
-    res->type = RT_TEXT;
     res->stat = RS_OK;
     return res;
 }
@@ -302,22 +343,9 @@ static inline int tokcat(char* des, int des_len, char* src_begin, char* src_end)
     return ret;
 }
 
-static ResourceType get_type(char* suffix)
-{
-    if (0 == strncasecmp("HTML", suffix, 4))
-        return RT_TEXT;
-    else if (0 == strncasecmp("HTM", suffix, 3))
-        return RT_TEXT;
-    else if (0 == strncasecmp("TXT", suffix, 3))
-        return RT_TEXT;
-    else if (0 == strncasecmp("PHP", suffix, 3))
-        return RT_PHP;
-    else if (0 == strncasecmp("PY", suffix, 2))
-        return RT_PY;
-    else
-        return RT_FILE;
 
-}
+
+
 
 static int fill_resource(Resource* resource, char* sbegin, char* send)
 {
@@ -371,17 +399,17 @@ check:
         resource->path_len += 1 + strlen(default_index);
         goto check;
     } else { //resource is a file
-        end = &resource->path[resource->path_len - 1];
-        while (*end != '.' && *end != '/') --end;
-        if (*end == '/') { 
-            /*
-             * the file request has no extension,
-             * treat it as usual file
-             */
-            resource->type = RT_FILE;
-        } else {
-            resource->type = get_type(end + 1);
-        }
+        //end = &resource->path[resource->path_len - 1];
+        //while (*end != '.' && *end != '/') --end;
+        //if (*end == '/') { 
+        //    /*
+        //     * the file request has no extension,
+        //     * treat it as usual file
+        //     */
+        //    resource->type = RT_FILE;
+        //} else {
+        //    resource->type = get_type(end + 1);
+        //}
     }
 
     return 0;
@@ -425,7 +453,7 @@ static int get_line(int client, char* buf, int size)
         }
     }
     /*
-     *trim out '\r\n'
+     *trim '\r\n'
      */
     if (buf[i] == '\n')
         buf[i] = 0;
@@ -435,114 +463,60 @@ static int get_line(int client, char* buf, int size)
     return i;
 }
 
-static int handle_static(int client, Request* request, Resource* resource)
-{
-    assert(is_static(resource->type));
-    DEBUG("is static");
-
-    Response response = default_response;
-    // TODO(wgtdkp): support more types and subtypes
-    switch (resource->type) {
-    case RT_TEXT:
-        response.content_type = MT_TEXT;
-        response.content_subtype = MT_HTML;
-        break;
-    case RT_IMG:
-        response.content_type = MT_IMG;
-        response.content_subtype = MT_PNG;
-        break;
-    default: // response html page default
-        response.content_type = MT_TEXT;
-        response.content_subtype = MT_HTML;
-        break;
-    }
-
-    switch(resource->stat) {
-    case RS_OK:
-        response.status = 200;
-        response.content_fd = open(resource->path, O_RDONLY, 00777);
-        assert(response.content_fd != -1);
-        break;
-    case RS_DENIED:
-        response.status = 403;
-        // TODO(wgtdkp): setup denied page
-        response.content_fd = open(default_403, O_RDONLY, 00777);
-        break;
-    case RS_NOTFOUND:
-    default:
-        response.status = 404;
-        // TODO(wgtdkp): bug: default_404 is just an relative path!
-        response.content_fd = open(default_404, O_RDONLY, 00777);
-        //assert(response.content_fd != -1);
-        break;
-    }
-
-    // setup content length
-    int fd = response.content_fd;
-    if (fd != -1) {
-        lseek(fd, 0, SEEK_SET);
-        response.content_length = lseek(fd, 0, SEEK_END);
-        lseek(fd, 0, SEEK_SET);
-    }
-
-    // send response
-    put_response(client, &response);
-
-    // release resource
-    if (response.content_fd != -1) {
-        int err = close(response.content_fd);
-        assert(err == 0);
-    }
-}
-
 static int handle_cgi(int client, Request* request, Resource* resource)
 {
-    assert(is_script(resource->type));
     int pid;
     int input[2];
     int output[2];
-    DEBUG("is script");
+    //DEBUG("is script");
     if (pipe(output) < 0) {
         // TODO(wgtdkp): error
-        DEBUG("pipe(output) error");
+        perror("pipe(output)");
     }
     if (pipe(input) < 0) {
         // TODO(wgtdkp): error
-        DEBUG("pipe(input) error");
+        perror("pipe(input)");
     }
     if ((pid = fork()) < 0) {
         // TODO(wgtdkp): error
-        DEBUG("fork error");
+        perror("fork");
     }
 
 
-    if (pid == 0) { // child, execute the cgi
+    if (pid == 0) { // child, execute the script
+        dup2(output[1], STDOUT_FILENO);
+        dup2(input[0], STDIN_FILENO);
         close(input[1]);
         close(output[0]);
-        // setup enviroment
+
         setup_env(request);
         // TODO(wgtdkp): handle more scripts
-        execl("php5-cgi", "php5-cgi %s", resource->path);
-        exit(0);
+        char* argv[] = {"php5-cgi", resource->path, NULL};
+        execv("/usr/bin/php5-cgi", argv);
+        //return 0;
+        //exit(0);
     } else {
-        close(input[0]);
         close(output[1]);
-        char ch;
+        close(input[0]);
         if (request->method == M_POST) {
+            DEBUG("METHOD: POST");
             for (int i = 0; i < request->content_length; i++) {
+                char ch;
                 recv(client, &ch, 1, 0);
                 write(input[1], &ch, 1);
+                fprintf(stderr, "%c", ch);
             }
         }
-        while (read(output[0], &ch, 1) > 0)
-            send(client, &ch, 1, 0);
-        
+        cat(client, output[0]);
+        //while (read(output[0], &ch, 1) > 0)
+        //    send(client, &ch, 1, 0);
+        //DEBUG("parent process");
         close(output[0]);
         close(input[1]);
         int status;
         waitpid(pid, &status, 0);
     }
-    return output[0];
+    return 0;
 }
 
 static void setup_env(Request* request)
@@ -550,11 +524,14 @@ static void setup_env(Request* request)
     char buf[255];
     sprintf(buf, "REQUEST_METHOD=%s", method_repr(request->method));
     putenv(buf);
+    sprintf(buf, "REDIRECT_STATUS=%3d", 200);
+    putenv(buf);
     if (request->method == M_GET) {
         sprintf(buf, "QUERY_STRING=%s", request->args);
         putenv(buf);
     } else if (request->method == M_POST) {
         sprintf(buf, "CONTENT_LENGTH=%d", request->content_length);
+        fprintf(stderr, "%s", buf);
         putenv(buf);
     }
 }
@@ -570,7 +547,7 @@ static void cat(int client, int fd)
     } while (len == buf_size);
 }
 
-static int put_response(int client, Response* response)
+static int put_response(int client, Request* request, Resource* resource, Response* response)
 {
     char begin[1024];
     char* buf = begin;
@@ -579,15 +556,18 @@ static int put_response(int client, Response* response)
             http_version[1],
             response->status,
             status_repr(response->status));
+    buf += sprintf(buf, "server: julia/0.0.0 \r\n");
+
+    if (response->is_script && response->status == 200) {
+        send(client, begin, buf - begin, 0);
+        return handle_cgi(client, request, resource);
+    }
     /*
      * if has content
      */
     if (response->content_fd != -1) {
-        buf += sprintf(buf, "Contend-Type: %s/%s \r\n",
-                content_type_repr(response->content_type),
-                content_type_repr(response->content_subtype));
-        //buf += sprintf(buf, "Content-Length: %d \r\n",
-        //        response->content_length);
+        buf += sprintf(buf, "Contend-Type: %s \r\n",
+                response->content_type);
     }
 
     buf += sprintf(buf, "\r\n");
@@ -598,23 +578,35 @@ static int put_response(int client, Response* response)
      */
     if (response->content_fd != -1) {
         cat(client, response->content_fd);
-        //char ch;
-        //while (1 == read(response->content_fd, &ch, 1)) {
-        //    send(client, &ch, 1, 0);
-        //}
-        /*
-        char* content = (char*)mmap(NULL, 
-                response->content_length, 
-                PROT_READ, 
-                MAP_SHARED, 
-                response->content_fd, 
-                0);
-        //for (int i = 0; i < response->content_length; i++)
-        //    fprintf(stderr, "%c", content[i]);
-        send(client, content, response->content_length, 0); 
-        */
     }
     return 0;
+}
+
+static const char* get_extension(Resource* resource)
+{
+    const char* end = &resource->path[resource->path_len-1];
+    while (*end != '.' && *end != '/') --end;
+    if (*end == '/') { 
+         return &resource->path[resource->path_len-1];
+    } else {
+        return end + 1;
+    }
+}
+
+static const char* get_type(const char* ext)
+{
+    int begin = 0, end = ext_num;
+    while (begin <= end) {
+        int mid = (end - begin) / 2 + begin;
+        int res = strcasecmp(ext, ext_map[mid][0]);
+        if (res == 0)
+            return ext_map[mid][1];
+        else if (res > 0)
+            begin = mid + 1;
+        else
+            end = mid - 1;
+    }
+    return NULL;
 }
 
 static void* handle_request(void* args)
@@ -626,40 +618,26 @@ static void* handle_request(void* args)
     parse_request_line(client, request, resource);
     parse_request_header(client, request);
 
-    /*
-    if (is_static(resource->type)) {
-        handle_static(client, request, resource);
-    } else {
-        handle_cgi(client, request, resource);
-    }
-    */
     Response response = default_response;
-    // TODO(wgtdkp): support more types and subtypes
-    switch (resource->type) {
-    case RT_PHP:
-    case RT_PY: // not supported now
-    case RT_TEXT:
-        response.content_type = MT_TEXT;
-        response.content_subtype = MT_HTML;
-        break;
-    case RT_IMG:
-        response.content_type = MT_IMG;
-        response.content_subtype = MT_PNG;
-        break;
-    default: // response html page default
-        response.content_type = MT_TEXT;
-        response.content_subtype = MT_HTML;
-        break;
+    const char* ext = get_extension(resource);
+    if (is_script(ext)) {
+        response.is_script = 1;
+        response.content_type = "text/html";
+    } else {
+        response.is_script = 0;
+        // TODO(wgtdkp): support more MIME types
+        // content_type could be null
+        response.content_type = get_type(ext);
     }
 
     switch(resource->stat) {
     case RS_OK:
         response.status = 200;
-        if (is_static(resource->type))
+        if (!response.is_script) {
             response.content_fd = open(resource->path, O_RDONLY, 00777);
-        else
-            response.content_fd = handle_cgi(client, request, resource);
-        assert(response.content_fd != -1);
+            assert(response.content_fd != -1);
+        }
+        
         break;
     case RS_DENIED:
         response.status = 403;
@@ -677,7 +655,7 @@ static void* handle_request(void* args)
     }
 
     // send response
-    put_response(client, &response);
+    put_response(client, request, resource, &response);
 
     // release resource
     if (response.content_fd != -1) {
@@ -688,7 +666,7 @@ static void* handle_request(void* args)
     destroy_resource(&resource);
     destroy_request(&request);
     close(client);
-    DEBUG("conenction closed");
+    //DEBUG("conenction closed");
 }
 
 static const char* status_repr(int status)
@@ -699,12 +677,6 @@ static const char* status_repr(int status)
     return "(null)";
 }
 
-static const char* content_type_repr(MediaType type)
-{
-    switch(type) {
-#       include "content_type.inc"
-    }
-}
 
 static int startup(unsigned short* port)
 {
