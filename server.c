@@ -292,6 +292,8 @@ static int parse_request_line(int client, Request* request, Resource* resource)
 {
     char buf[1024];
     int len = get_line(client, buf, sizeof(buf));
+    if (len == -1)
+        return -1;
     char* begin = buf;
     char* end = buf;
     WALK(begin, end);
@@ -313,9 +315,8 @@ static int parse_request_header(int client, Request* request)
     char buf[1024];
     while (1) {
         int len = get_line(client, buf, sizeof(buf));
-        if (0 == len) { // '\r\n' has already been trimed out
-            break;
-        }
+        if (len == -1) return -1;
+        if (0 == len) break; // '\r\n' has already been trimed out
         char* begin = buf;
         char* end = buf;
         WALK_UNTIL(end, ':');
@@ -445,12 +446,15 @@ static int parse_uri(char* sbegin, char* send, Request* request, Resource* resou
 static int get_line(int client, char* buf, int size)
 {
     int i;
+    int cnt = 0;
     for (i = 0; i < size; i++) {
-        if (1 != recv(client, &buf[i], 1, 0) 
+        if (1 != (cnt = recv(client, &buf[i], 1, 0)) 
             || '\n' == buf[i]) {
             break;
         }
     }
+    if (cnt == -1)
+        return -1;
     /*
      *trim '\r\n'
      */
@@ -627,8 +631,10 @@ static void* handle_request(void* args)
     //Buffer* request_buf = create_buffer(100);
     Request* request = create_request();
     Resource* resource = create_resource();
-    parse_request_line(client, request, resource);
-    parse_request_header(client, request);
+    if (0 != parse_request_line(client, request, resource))
+        goto close;
+    if (0 != parse_request_header(client, request))
+        goto close;
 
     Response response = default_response;
     const char* ext = get_extension(resource);
@@ -670,9 +676,10 @@ static void* handle_request(void* args)
         int err = close(response.content_fd);
         assert(err == 0);
     }
+
+close:
     destroy_resource(&resource);
     destroy_request(&request);
-
     close(client);
 }
 

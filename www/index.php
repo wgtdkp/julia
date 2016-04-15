@@ -35,5 +35,9 @@
                 include "home.php";
             }
         ?>
+
+        <div class="footer">
+            <p>powered by julia</p>
+        </div>
     </body>
 </html>
