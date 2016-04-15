@@ -479,24 +479,11 @@ static int handle_cgi(int client, Request* request, Resource* resource)
         dup2(input[0], STDIN_FILENO);
         close(input[1]);
         close(output[0]);
-
-        /*
+     
         setup_env(request, resource->path);
         // TODO(wgtdkp): handle more scripts
         execv("/usr/bin/php5-cgi", (char*[]){NULL});
         perror("php5-cgi");
-        */
-        putenv("GATEWAY_INTERFACE=CGI/1.1");
-        putenv("REQUEST_METHOD=GET");
-        putenv("QUERY_STRING=user=kangping");
-        //putenv("REQUEST_METHOD=POST");
-        //putenv("CONTENT_LENGTH=5");
-        putenv("REDIRECT_STATUS=200");
-        putenv("CONTENT_TYPE=application/x-www-form-urlencoded");
-        //putenv("SCRIPT_FILENAME=/home/wgtdkp/julia/www/index.php");
-        putenv("SCRIPT_FILENAME=/home/wgtdkp/julia/www/index.php");
-        char* argv[] = {NULL};
-        execv("/usr/bin/php5-cgi", argv);
     } else {
         close(output[1]);
         close(input[0]);
@@ -504,7 +491,7 @@ static int handle_cgi(int client, Request* request, Resource* resource)
             catn(input[1], client, request->content_length);
         }
         cat(client, output[0]);
-        
+
         close(output[0]);
         close(input[1]);
         int status;
@@ -546,18 +533,14 @@ static void setup_env(Request* request, const char* script_path)
  */
 static void cat(int des, int src)
 {
-    static const int buf_size = 200 * 1024;
+    // 500KiB buffer
+    static const int buf_size = 500 * 1024;
     char buf[buf_size];
     int len;
     do {
         len = read(src, buf, buf_size);
         write(des, buf, len);
-        for (int i = 0; i < len; i++)
-            printf("%c", buf[i]);
-        printf("\n");
-        fflush(stdout);
-
-    } while (len == buf_size);
+    } while (len > 0);
 }
 
 /*
@@ -565,7 +548,8 @@ static void cat(int des, int src)
  */
 static void catn(int des, int src, int n)
 {
-    static const int buf_size = 200 * 1024;
+    // 500KiB buffer
+    static const int buf_size = 500 * 1024;
     char buf[buf_size];
     int len;
     do {
