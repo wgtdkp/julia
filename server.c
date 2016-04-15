@@ -1,4 +1,3 @@
-#define _XOPEN_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/mman.h>
@@ -27,15 +26,14 @@
 #define IS_DOT(begin, end)  ((end) - (begin) == 1 && *(begin) == '.')
 #define IS_DDOT(begin, end) ((end) - (begin) == 2 && *(begin) == '.' && *((begin) + 1) == '.')
 /*
- root directory of the application;
- any resource that out of this directory
- is not available;
+ * root directory of the application;
+ * any resource that out of this directory
+ * is not available;
 */
-// TODO(wgtdkp): make them configurable
 static char default_index[] = "index.html";
-static char default_404[] = "/home/wgtdkp/julia/www/404.html";
-static char default_403[] = "/home/wgtdkp/julia/www/403.html";
-static char www_dir[] = "/home/wgtdkp/julia/www";
+static char default_404[256];
+static char default_403[256];
+static char www_dir[256];
 static char http_version[2] = {1, 1};   // http/1.1
 static const char* ext_map[][2] = {
     {"css",     "text/css"},
@@ -141,7 +139,8 @@ static int put_response(int client, Request* request, Resource* resource, Respon
 static int startup(unsigned short* port);
 static const char* status_repr(int status);
 static void setup_env(Request* request, const char* script_path);
-static void cat(int client, int fd);
+static void cat(int des, int src);
+static void catn(int des, int src, int n);
 static const char* get_type(const char* ext);
 
 static String* create_string(int c);
@@ -458,7 +457,7 @@ static int get_line(int client, char* buf, int size)
         buf[i] = 0;
     if (i >= 1 && buf[i - 1] == '\r')
         buf[--i] = 0;
-    DEBUG(buf);
+    //DEBUG(buf);
     return i;
 }
 
@@ -467,20 +466,12 @@ static int handle_cgi(int client, Request* request, Resource* resource)
     int pid;
     int input[2];
     int output[2];
-    //DEBUG("is script");
-    if (pipe(output) < 0) {
-        // TODO(wgtdkp): error
+    if (pipe(output) < 0)
         perror("pipe(output)");
-    }
-    if (pipe(input) < 0) {
-        // TODO(wgtdkp): error
+    if (pipe(input) < 0)
         perror("pipe(input)");
-    }
-    if ((pid = fork()) < 0) {
-        // TODO(wgtdkp): error
+    if ((pid = fork()) < 0)
         perror("fork");
-    }
-
 
     if (pid == 0) { // child, execute the script
         dup2(output[1], STDOUT_FILENO);
@@ -490,21 +481,12 @@ static int handle_cgi(int client, Request* request, Resource* resource)
 
         setup_env(request, resource->path);
         // TODO(wgtdkp): handle more scripts
-        char* argv[] = {"php5-cgi", resource->path, NULL};
-        execv("/usr/bin/php5-cgi", argv);//(char*[]){NULL});
-        //return 0;
-        //exit(0);
+        execv("/usr/bin/php5-cgi", (char*[]){NULL});
     } else {
         close(output[1]);
         close(input[0]);
         if (request->method == M_POST) {
-            DEBUG("METHOD: POST");
-            for (int i = 0; i < request->content_length; i++) {
-                char ch;
-                recv(client, &ch, 1, 0);
-                write(input[1], &ch, 1);
-                //fprintf(stderr, "%c", ch);
-            }
+            catn(input[1], client, request->content_length);
         }
         cat(client, output[0]);
         
@@ -529,7 +511,6 @@ static void setup_env(Request* request, const char* script_path)
 
     snprintf(env_filename, 256 - 1, "SCRIPT_FILENAME=%s", script_path);
     putenv(env_filename);
-    //fprintf(stderr, "%s", buf);
     putenv("REDIRECT_STATUS=200");
     putenv("GATEWAY_INTERFACE=CGI/1.1");
     putenv("CONTENT_TYPE=application/x-www-form-urlencoded");
@@ -545,15 +526,33 @@ static void setup_env(Request* request, const char* script_path)
     }
 }
 
-static void cat(int client, int fd)
+/*
+ * read from src file to des file
+ */
+static void cat(int des, int src)
 {
     static const int buf_size = 200 * 1024;
     char buf[buf_size];
     int len;
     do {
-        len = read(fd, buf, buf_size);
-        write(client, buf, len);
+        len = read(src, buf, buf_size);
+        write(des, buf, len);
     } while (len == buf_size);
+}
+
+/*
+ * read n bytes from src file to des file
+ */
+static void catn(int des, int src, int n)
+{
+    static const int buf_size = 200 * 1024;
+    char buf[buf_size];
+    int len;
+    do {
+        len = read(src, buf, buf_size);
+        write(des, buf, len);
+        n -= len;
+    } while (n > 0);
 }
 
 static int put_response(int client, Request* request, Resource* resource, Response* response)
@@ -650,16 +649,12 @@ static void* handle_request(void* args)
         break;
     case RS_DENIED:
         response.status = 403;
-        // TODO(wgtdkp): setup denied page
         response.content_fd = open(default_403, O_RDONLY, 00777);
         break;
     case RS_NOTFOUND:
     default:
         response.status = 404;
-        // TODO(wgtdkp): bug: default_404 is just an relative path!
         response.content_fd = open(default_404, O_RDONLY, 00777);
-
-        //assert(response.content_fd != -1);
         break;
     }
 
@@ -671,11 +666,10 @@ static void* handle_request(void* args)
         int err = close(response.content_fd);
         assert(err == 0);
     }
-
     destroy_resource(&resource);
     destroy_request(&request);
+
     close(client);
-    //DEBUG("conenction closed");
 }
 
 static const char* status_repr(int status)
@@ -719,15 +713,26 @@ static int startup(unsigned short* port)
     return server_sock;
 }
 
-static int config(void)
+static void config(const char* dir)
 {
-    //strcpy(www_dir, "/home/wgtdkp/www");
-    return 0;
+    realpath(dir, www_dir);
+    snprintf(default_404, 256 - 1, "%s/404.html", www_dir);
+    snprintf(default_403, 256 - 1, "%s/403.html", www_dir);
 }
 
-int main(int args, char* argv[])
+static void usage(void)
+{
+    fprintf(stderr, "Usage:\n"
+                    "    ./julia port www_dir\n");
+}
+
+int main(int argc, char* argv[])
 {
     // 0. arg parsing
+    if (argc < 3) {
+        usage(); exit(-1);
+    }
+    config(argv[2]);
 
     // 1.config
     int server_sock = -1;
@@ -743,19 +748,14 @@ int main(int args, char* argv[])
         exit(-1);
     }
 
-    // 3. config
-    config();
-
-    // 4. listening loop
+    // 3. listening loop
     printf("waiting for connection...\n");
     while (1) {
         client_sock = accept(server_sock,
             (struct sockaddr*)&client, &client_len);
         if (client_sock == -1) {
-            //TODO(wgtdkp): error
             fprintf(stderr, "client connection failed\n");
         } else {
-            //TODO(wgtdkp):
             pthread_t request_handler;
             int err = pthread_create(&request_handler,
                 NULL, handle_request, &client_sock);
