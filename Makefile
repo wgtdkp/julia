@@ -6,7 +6,7 @@ julia:
 client:
 	${CC} -std=c11 ${DEFS} client.c -o client
 test:
-	${CC} -std=c11 ${DEFS} test.c -o test
+	${CC} -std=c11 ${DEFS} ./test/test.c -o ./test/test
 all:
 	make server & make client
 clean:
