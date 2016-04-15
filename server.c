@@ -37,7 +37,6 @@ static char default_404[] = "/home/wgtdkp/julia/www/404.html";
 static char default_403[] = "/home/wgtdkp/julia/www/403.html";
 static char www_dir[] = "/home/wgtdkp/julia/www";
 static char http_version[2] = {1, 1};   // http/1.1
-
 static const char* ext_map[][2] = {
     {"css",     "text/css"},
     {"htm",     "text/html"},
@@ -141,7 +140,7 @@ static int handle_static(int client, Request* request, Resource* resource);
 static int put_response(int client, Request* request, Resource* resource, Response* response);
 static int startup(unsigned short* port);
 static const char* status_repr(int status);
-static void setup_env(Request* request);
+static void setup_env(Request* request, const char* script_path);
 static void cat(int client, int fd);
 static const char* get_type(const char* ext);
 
@@ -489,10 +488,10 @@ static int handle_cgi(int client, Request* request, Resource* resource)
         close(input[1]);
         close(output[0]);
 
-        setup_env(request);
+        setup_env(request, resource->path);
         // TODO(wgtdkp): handle more scripts
         char* argv[] = {"php5-cgi", resource->path, NULL};
-        execv("/usr/bin/php5-cgi", argv);
+        execv("/usr/bin/php5-cgi", argv);//(char*[]){NULL});
         //return 0;
         //exit(0);
     } else {
@@ -504,13 +503,11 @@ static int handle_cgi(int client, Request* request, Resource* resource)
                 char ch;
                 recv(client, &ch, 1, 0);
                 write(input[1], &ch, 1);
-                fprintf(stderr, "%c", ch);
+                //fprintf(stderr, "%c", ch);
             }
         }
         cat(client, output[0]);
-        //while (read(output[0], &ch, 1) > 0)
-        //    send(client, &ch, 1, 0);
-        //DEBUG("parent process");
+        
         close(output[0]);
         close(input[1]);
         int status;
@@ -519,20 +516,32 @@ static int handle_cgi(int client, Request* request, Resource* resource)
     return 0;
 }
 
-static void setup_env(Request* request)
+static void setup_env(Request* request, const char* script_path)
 {
-    char buf[255];
-    sprintf(buf, "REQUEST_METHOD=%s", method_repr(request->method));
-    putenv(buf);
-    sprintf(buf, "REDIRECT_STATUS=%3d", 200);
-    putenv(buf);
+    /*
+     * [POS34-C]: Do not call putenv() with a pointer to an automatic variable as the argument
+     * as putenv() just do copy the pointer! so each enrivonment needs a buffer.
+     */
+    static char env_filename[256];
+    static char env_method[64];
+    static char env_string[256];
+    static char env_length[64];
+
+    snprintf(env_filename, 256 - 1, "SCRIPT_FILENAME=%s", script_path);
+    putenv(env_filename);
+    //fprintf(stderr, "%s", buf);
+    putenv("REDIRECT_STATUS=200");
+    putenv("GATEWAY_INTERFACE=CGI/1.1");
+    putenv("CONTENT_TYPE=application/x-www-form-urlencoded");
+    
+    snprintf(env_method, 64 - 1, "REQUEST_METHOD=%s", method_repr(request->method));
+    putenv(env_method);
     if (request->method == M_GET) {
-        sprintf(buf, "QUERY_STRING=%s", request->args);
-        putenv(buf);
+        snprintf(env_string, 256 - 1, "QUERY_STRING=%s", request->args);
+        putenv(env_string);
     } else if (request->method == M_POST) {
-        sprintf(buf, "CONTENT_LENGTH=%d", request->content_length);
-        fprintf(stderr, "%s", buf);
-        putenv(buf);
+        snprintf(env_length, 64 - 1, "CONTENT_LENGTH=%d", request->content_length);
+        putenv(env_length);
     }
 }
 
