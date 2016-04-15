@@ -30,7 +30,7 @@
  * any resource that out of this directory
  * is not available;
 */
-static char default_index[] = "index.html";
+static char default_index[] = "index.php";
 static char default_404[256];
 static char default_403[256];
 static char www_dir[256];
@@ -45,6 +45,7 @@ static const char* ext_map[][2] = {
     {"jpg",     "image/jpeg"},
     {"svg",     "image/svg+xml"},
     {"txt",     "text/plain"},
+    {"zip",     "application/zip"},
 };
 static const size_t ext_num = sizeof(ext_map) / sizeof(ext_map[0]);
 
@@ -479,9 +480,23 @@ static int handle_cgi(int client, Request* request, Resource* resource)
         close(input[1]);
         close(output[0]);
 
+        /*
         setup_env(request, resource->path);
         // TODO(wgtdkp): handle more scripts
         execv("/usr/bin/php5-cgi", (char*[]){NULL});
+        perror("php5-cgi");
+        */
+        putenv("GATEWAY_INTERFACE=CGI/1.1");
+        putenv("REQUEST_METHOD=GET");
+        putenv("QUERY_STRING=user=kangping");
+        //putenv("REQUEST_METHOD=POST");
+        //putenv("CONTENT_LENGTH=5");
+        putenv("REDIRECT_STATUS=200");
+        putenv("CONTENT_TYPE=application/x-www-form-urlencoded");
+        //putenv("SCRIPT_FILENAME=/home/wgtdkp/julia/www/index.php");
+        putenv("SCRIPT_FILENAME=/home/wgtdkp/julia/www/index.php");
+        char* argv[] = {NULL};
+        execv("/usr/bin/php5-cgi", argv);
     } else {
         close(output[1]);
         close(input[0]);
@@ -537,6 +552,11 @@ static void cat(int des, int src)
     do {
         len = read(src, buf, buf_size);
         write(des, buf, len);
+        for (int i = 0; i < len; i++)
+            printf("%c", buf[i]);
+        printf("\n");
+        fflush(stdout);
+
     } while (len == buf_size);
 }
 
@@ -749,7 +769,10 @@ int main(int argc, char* argv[])
     }
 
     // 3. listening loop
-    printf("waiting for connection...\n");
+    printf("julia started...\n");
+    printf("doc root: %s\n", argv[2]);
+    printf("listening at port: %d\n", port);
+    fflush(stdout);
     while (1) {
         client_sock = accept(server_sock,
             (struct sockaddr*)&client, &client_len);

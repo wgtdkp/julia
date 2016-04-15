@@ -1,0 +1,38 @@
+
+body {
+    margin-left: auto;
+    margin-right: auto;
+    width: 800px;
+}
+
+body a {
+    text-decoration: none;
+}
+
+body div {
+    width: 100%;
+}
+
+.menu {
+    /*height: 40px;*/
+    text-align: center;
+    margin-bottom: 80px;
+    font-size: 24px;
+}
+
+.menu-item {
+    /*background-color: blue;*/
+    width: 200px;
+    height: 100%;
+    float: left;
+}
+
+body h1 {
+    /*background-color: red;*/
+    font-weight: 900;
+    font-size: 30px;
+}
+
+.contact {
+    font-style: italic;
+}

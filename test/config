@@ -1,0 +1,7 @@
+#
+#
+#
+www="/home/wgtdkp/julia/www"
+default_404="404.html"
+default_403="403.html"
+php-cgi="/usr/bin/php5-cgi"
