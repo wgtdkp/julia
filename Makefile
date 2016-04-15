@@ -1,7 +1,7 @@
 
 CC=gcc
 DEFS =-D_XOPEN_SOURCE -D_GNU_SOURCE
-server:
+julia:
 	${CC} -std=c11 -pthread  ${DEFS} server.c -o julia
 client:
 	${CC} -std=c11 ${DEFS} client.c -o client
