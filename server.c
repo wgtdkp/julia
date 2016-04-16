@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include <sys/mman.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
@@ -33,6 +34,7 @@
 static char default_index[] = "index.php";
 static char default_404[256];
 static char default_403[256];
+static char default_unimpl[256];
 static char www_dir[256];
 static char http_version[2] = {1, 1};   // http/1.1
 static const char* ext_map[][2] = {
@@ -135,7 +137,6 @@ static int parse_request_header(int client, Request* request);
 static int parse_uri(char* sbegin, char* send, Request* request, Resource* resource);
 static int fill_resource(Resource* resource, char* begin, char* end);
 static void* handle_request(void* args);
-static int handle_static(int client, Request* request, Resource* resource);
 static int put_response(int client, Request* request, Resource* resource, Response* response);
 static int startup(unsigned short* port);
 static const char* status_repr(int status);
@@ -143,6 +144,7 @@ static void setup_env(Request* request, const char* script_path);
 static void cat(int des, int src);
 static void catn(int des, int src, int n);
 static const char* get_type(const char* ext);
+static void ju_log(const char* format, ...);
 
 static String* create_string(int c);
 static String* destroy_string(String** str);
@@ -343,10 +345,6 @@ static inline int tokcat(char* des, int des_len, char* src_begin, char* src_end)
     return ret;
 }
 
-
-
-
-
 static int fill_resource(Resource* resource, char* sbegin, char* send)
 {
     if (sbegin == send) { //path not explicitly given
@@ -398,19 +396,7 @@ check:
         strcat(resource->path, default_index);
         resource->path_len += 1 + strlen(default_index);
         goto check;
-    } else { //resource is a file
-        //end = &resource->path[resource->path_len - 1];
-        //while (*end != '.' && *end != '/') --end;
-        //if (*end == '/') { 
-        //    /*
-        //     * the file request has no extension,
-        //     * treat it as usual file
-        //     */
-        //    resource->type = RT_FILE;
-        //} else {
-        //    resource->type = get_type(end + 1);
-        //}
-    }
+    } else {} //resource is a file
 
     return 0;
 }
@@ -636,7 +622,17 @@ static void* handle_request(void* args)
     if (0 != parse_request_header(client, request))
         goto close;
 
+    ju_log("%s %s \n", method_repr(request->method), resource->path);
+
     Response response = default_response;
+
+    if (request->method != M_GET && request->method != M_POST) {
+        response.status = 501;
+        response.content_type = "text/html";
+        response.content_fd = open(default_unimpl, O_RDONLY, 00777);
+        goto out;
+    }
+
     const char* ext = get_extension(resource);
     if (is_script(ext)) {
         response.is_script = 1;
@@ -667,7 +663,7 @@ static void* handle_request(void* args)
         response.content_fd = open(default_404, O_RDONLY, 00777);
         break;
     }
-
+out:
     // send response
     put_response(client, request, resource, &response);
 
@@ -729,6 +725,7 @@ static void config(const char* dir)
     realpath(dir, www_dir);
     snprintf(default_404, 256 - 1, "%s/404.html", www_dir);
     snprintf(default_403, 256 - 1, "%s/403.html", www_dir);
+    snprintf(default_unimpl, 256 - 1, "%s/unimpl.html", www_dir);
 }
 
 static void usage(void)
@@ -736,6 +733,25 @@ static void usage(void)
     fprintf(stderr, "Usage:\n"
                     "    ./julia port www_dir\n");
 }
+
+static void ju_log(const char* format, ...)
+{
+    time_t t = time(NULL);
+    struct tm tm = *localtime(&t);
+    char file_name[64];
+    snprintf(file_name, 64 - 1, "log-%d-%d-%d.txt",
+            tm.tm_year, tm.tm_mon + 1, tm.tm_mday);
+
+    FILE* log_file = fopen(file_name, "a+");
+    if (log_file == NULL)
+        return;
+
+    va_list args;
+    va_start(args, format);
+    vfprintf(log_file, format, args);
+    va_end(args);
+    fclose(log_file);
+}   
 
 int main(int argc, char* argv[])
 {
@@ -761,7 +777,7 @@ int main(int argc, char* argv[])
 
     // 3. listening loop
     printf("julia started...\n");
-    printf("doc root: %s\n", argv[2]);
+    printf("doc root: %s\n", www_dir);
     printf("listening at port: %d\n", port);
     fflush(stdout);
     while (1) {
@@ -770,6 +786,11 @@ int main(int argc, char* argv[])
         if (client_sock == -1) {
             fprintf(stderr, "client connection failed\n");
         } else {
+            time_t t = time(NULL);
+            struct tm tm = *localtime(&t);
+            ju_log("[%d:%d:%d] %s: ", tm.tm_hour, tm.tm_min, tm.tm_sec, 
+                    inet_ntoa(client.sin_addr));
+
             pthread_t request_handler;
             int err = pthread_create(&request_handler,
                 NULL, handle_request, &client_sock);
