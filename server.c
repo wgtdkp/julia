@@ -482,6 +482,7 @@ static int get_line(int client, char* buf, int size)
 {
     int i;
     for (i = 0; i < size; i++) {
+        // TODO(wgtdkp): read mutlibytes to speed up
         if (1 != read(client, &buf[i], 1))
             return -1;
         if ('\n' == buf[i])
@@ -867,6 +868,16 @@ static void ju_log(const char* format, ...)
     fclose(log_file);
 }
 
+#define EXIT_ON(cond, msg)  if ((cond)) { perror((msg)); exit(EXIT_FAILURE); }
+
+static inline void set_nonblocking(int fd)
+{
+    int flag = fcntl(fd, F_GETFL, 0);
+    EXIT_ON(flag == -1, "fcntl: F_GETFL");
+    flag |= O_NONBLOCK;
+    EXIT_ON(fcntl(fd, F_SETFL, flag) == -1, "fcntl: FSETFL");
+}
+
 int main(int argc, char* argv[])
 {
     // 0. arg parsing
@@ -895,7 +906,35 @@ int main(int argc, char* argv[])
     printf("listening at port: %d\n", port);
     fflush(stdout);
 
-    //int epoll_fd = epoll_create(2048 * 10);
+    const int nevents = 128;
+    struct epoll_event ev, events[nevents];
+    int epoll_fd = epoll_create1(0);
+    EXIT_ON(epoll_fd == -1, "epoll_createl");
+
+    ev.events = EPOLLIN;
+    ev.data.fd = server_sock;
+    EXIT_ON(epoll_ctl(epoll_fd, EPOLL_CTL_ADD, server_sock, &ev) == -1,
+            "epoll_ctl: server_sock");
+    while (true) {
+        int nfds = epoll_wait(epoll_fd, events, nevents, -1);
+        EXIT_ON(nfds == -1, "epoll_wait");
+        for (int i = 0; i < nfds; i++) {
+            if (events[i].data.fd == server_sock) {
+                client_sock = accept(server_sock,
+                        (struct sockaddr*)&client, &client_len);
+                EXIT_ON(client_sock == -1, "accept");
+                set_nonblocking(client_sock);
+                ev.events = EPOLLIN | EPOLLET;
+                ev.data.fd = client_sock;
+                EXIT_ON(epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_sock, &ev) == -1,
+                        "epoll_ctl: client_sock");
+            } else {
+                handle_request(events[i].data.fd);
+            }
+        }
+    }
+
+    /*
     pthread_t request_handler;
     int i = 0;
     while (1) {
@@ -916,11 +955,11 @@ int main(int argc, char* argv[])
                 perror("pthread_create");
                 break;
             }
-            //if (++i == 10000)
-            //    break;
+            if (++i == 20000)
+                break;
         }
     }
-
+    */
     close(server_sock);
     return 0;
 }
