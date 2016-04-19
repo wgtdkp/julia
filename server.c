@@ -18,6 +18,9 @@
 
 #define DEBUG(msg)  fprintf(stderr, "%s\n", (msg));
 
+#define MIN(x, y)   ((x) > (y) ? (y): (x))
+#define MAX(x, y)   MIN(y, x)
+
 #define WALK(begin, end)    while (*end != 0 && isspace((int)(*end))) { ++end; } \
                             begin = end;  \
                             while (*end != 0 && !isspace((int)(*end))) { ++end; }
@@ -141,8 +144,8 @@ static int put_response(int client, Request* request, Resource* resource, Respon
 static int startup(unsigned short* port);
 static const char* status_repr(int status);
 static void setup_env(Request* request, const char* script_path);
-static void cat(int des, int src);
-static void catn(int des, int src, int n);
+static int cat(int des, int src);
+static int catn(int des, int src, int n);
 static const char* get_type(const char* ext);
 static void ju_log(const char* format, ...);
 
@@ -299,6 +302,8 @@ static int parse_request_line(int client, Request* request, Resource* resource)
     char* begin = buf;
     char* end = buf;
     WALK(begin, end);
+    if (*begin == 0)
+        return -1;
     request->method = get_method(begin, end - begin);
     if (request->method < 0)
         return -1;
@@ -311,7 +316,7 @@ static int parse_request_line(int client, Request* request, Resource* resource)
     return 0;
 }
 
-//return: error
+//return: -1, error;
 static int parse_request_header(int client, Request* request)
 {
     char buf[1024];
@@ -401,7 +406,7 @@ check:
     return 0;
 }
 
-//return: error
+//return: -1, error;
 static int parse_uri(char* sbegin, char* send, Request* request, Resource* resource)
 {   
 
@@ -521,32 +526,39 @@ static void setup_env(Request* request, const char* script_path)
 /*
  * read from src file to des file
  */
-static void cat(int des, int src)
+static int cat(int des, int src)
 {
     // 500KiB buffer
     static const int buf_size = 500 * 1024;
     char buf[buf_size];
-    int len;
+    int len, readed = 0;
     do {
         len = read(src, buf, buf_size);
         write(des, buf, len);
+        readed += len;
     } while (len > 0);
+    return readed;
 }
 
 /*
  * read n bytes from src file to des file
  */
-static void catn(int des, int src, int n)
+static int catn(int des, int src, int n)
 {
     // 500KiB buffer
     static const int buf_size = 500 * 1024;
     char buf[buf_size];
-    int len;
+    int len, readed = 0;
     do {
-        len = read(src, buf, buf_size);
+        int size = MIN(buf_size, n);
+        len = read(src, buf, size);
+        if (len < 0) break;
         write(des, buf, len);
+        readed += len;
         n -= len;
     } while (n > 0);
+    assert(n == 0);
+    return readed;
 }
 
 static int put_response(int client, Request* request, Resource* resource, Response* response)
@@ -578,6 +590,7 @@ static int put_response(int client, Request* request, Resource* resource, Respon
     /*
      * send content, if has
      */
+    //DEBUG("ready to cat file...");
     if (response->content_fd != -1) {
         cat(client, response->content_fd);
     }
