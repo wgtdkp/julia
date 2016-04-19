@@ -1,7 +1,7 @@
 <div>
     <h2> <span style="font-style: italic;">Julia</span> is a simple open source http server. Actually, it is just <a href="http://www.wgtdkp.com">wgtdkp</a>'s homework of <span style="font-style: italic;">parallel computing</span>
     </h2>
-    <h3>what supported?</h3>
+    <h3>What supported?</h3>
     <lu>
         <li>basical http methods, i.e. post, get</li>
         <li>php is supported, but only php5</li>

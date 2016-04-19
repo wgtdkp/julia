@@ -2,7 +2,7 @@
 <html>
     <head>
         <title>julia homepage</title>
-        <link type="text/css" href="./css/home.css" rel="stylesheet" />
+        <!--<link type="text/css" href="./css/home.css" rel="stylesheet" />-->
     </head>
     <body>
         <div class="header">
