@@ -612,16 +612,16 @@ static void setup_env(Request* request, const char* script_path)
  */
 static int cat(int des, int src)
 {
-    // 500KiB buffer
-    static const int buf_size = 500 * 1024;
-    char buf[buf_size];
-    int len, readed = 0;
-    do {
-        len = read(src, buf, buf_size);
-        write(des, buf, len);
-        readed += len;
-    } while (len > 0);
-    return readed;
+    struct stat st;
+    assert(fstat(src, &st) != -1);
+    int len = st.st_size;
+    // TODO(wgtdkp): it may be not possible for big file to be mapped into memory
+    char* addr = mmap(NULL, len, PROT_READ, MAP_SHARED, src, 0);
+    assert(addr != MAP_FAILED);
+    // TODO(wgtdkp): handle partial write
+    assert(write(des, addr, len) == len);
+    munmap(addr, len);
+    return len;
 }
 
 /*
@@ -916,8 +916,8 @@ int main(int argc, char* argv[])
                 perror("pthread_create");
                 break;
             }
-            if (++i == 10000)
-                break;
+            //if (++i == 10000)
+            //    break;
         }
     }
 
