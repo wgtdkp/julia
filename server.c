@@ -10,6 +10,7 @@
 #include <sys/wait.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <errno.h>
 #include <pthread.h>
 #include <unistd.h>
 #include <ctype.h>
@@ -327,7 +328,6 @@ static int parse_request_line(int client, Request* request, Resource* resource)
 {
     char buf[1024];
     int len = get_line(client, buf, sizeof(buf));
-    //fprintf(stderr, "request line length: %d\n", len);
     if (len == -1)
         return -1;
     char* begin = buf;
@@ -563,7 +563,6 @@ static int transfer_chunk(int des, int src)
         cats(des, buf, readed);
         write(des, "\r\n", 2);
         total += readed;
-        //fprintf(stderr, "chunk-size: %d\n", readed);
     }
     return total;
 }
@@ -616,8 +615,10 @@ static int cat(int des, int src)
     struct stat st;
     assert(fstat(src, &st) != -1);
     int len = st.st_size;
+    if (len == 0)
+        return 0;
     // TODO(wgtdkp): it may be not possible for big file to be mapped into memory
-    char* addr = mmap(NULL, len, PROT_READ, MAP_SHARED, src, 0);
+    char* addr = mmap(NULL, len, PROT_READ, MAP_PRIVATE, src, 0);
     assert(addr != MAP_FAILED);
     // TODO(wgtdkp): handle partial write
     assert(write(des, addr, len) == len);
@@ -685,6 +686,7 @@ static int put_response(int client, Request* request, Resource* resource, Respon
      * send content, if has
      */
     //DEBUG("ready to cat file...");
+    
     if (response->content_fd != -1) {
         cat(client, response->content_fd);
     }
@@ -786,11 +788,9 @@ static void* handle_request(int client)
         destroy_resource(&resource);
         destroy_request(&request);
         if (!keep_alive){
-            //DEBUG("close connection");
             close(client);
             return 0;
         }
-        //DEBUG("sending done...");
     }
 }
 
@@ -801,7 +801,6 @@ static const char* status_repr(int status)
     }
     return "(null)";
 }
-
 
 static int startup(unsigned short* port)
 {
@@ -878,6 +877,17 @@ static inline void set_nonblocking(int fd)
     EXIT_ON(fcntl(fd, F_SETFL, flag) == -1, "fcntl: FSETFL");
 }
 
+// return: -1, error; else, accepted socket fd
+static inline int event_add(int epoll_fd, int event_fd)
+{
+    struct epoll_event ev;
+    set_nonblocking(event_fd);
+    ev.events = EPOLLIN | EPOLLET;
+    ev.data.fd = event_fd;
+    EXIT_ON(epoll_ctl(epoll_fd, EPOLL_CTL_ADD, event_fd, &ev) == -1,
+            "epoll_ctl: event_fd");
+}
+
 int main(int argc, char* argv[])
 {
     // 0. arg parsing
@@ -890,8 +900,7 @@ int main(int argc, char* argv[])
     int server_sock = -1;
     int client_sock = -1;
     unsigned short port = atoi(argv[1]);
-    struct sockaddr_in client;
-    int client_len = sizeof(client);
+    
 
     // 2.start server
     server_sock = startup(&port);
@@ -907,29 +916,36 @@ int main(int argc, char* argv[])
     fflush(stdout);
 
     const int nevents = 128;
-    struct epoll_event ev, events[nevents];
+    struct epoll_event events[nevents];
     int epoll_fd = epoll_create1(0);
     EXIT_ON(epoll_fd == -1, "epoll_createl");
 
-    ev.events = EPOLLIN;
-    ev.data.fd = server_sock;
-    EXIT_ON(epoll_ctl(epoll_fd, EPOLL_CTL_ADD, server_sock, &ev) == -1,
-            "epoll_ctl: server_sock");
+    event_add(epoll_fd, server_sock);
+    int cnt = 0;
     while (true) {
         int nfds = epoll_wait(epoll_fd, events, nevents, -1);
         EXIT_ON(nfds == -1, "epoll_wait");
+        //fprintf(stderr, "nfds: %d\n", nfds);
         for (int i = 0; i < nfds; i++) {
             if (events[i].data.fd == server_sock) {
-                client_sock = accept(server_sock,
-                        (struct sockaddr*)&client, &client_len);
-                EXIT_ON(client_sock == -1, "accept");
-                set_nonblocking(client_sock);
-                ev.events = EPOLLIN | EPOLLET;
-                ev.data.fd = client_sock;
-                EXIT_ON(epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_sock, &ev) == -1,
-                        "epoll_ctl: client_sock");
+                while (true) {
+                    struct sockaddr_in client;
+                    int client_len = sizeof(client);
+
+                    int client_sock = accept(server_sock,
+                            (struct sockaddr*)&client, &client_len);
+                    if (client_sock == -1) {
+                        if (errno != EAGAIN && errno != EWOULDBLOCK)
+                            perror("accept");
+                        break;
+                    }
+                    event_add(epoll_fd, client_sock);
+                }
             } else {
                 handle_request(events[i].data.fd);
+                //fprintf(stderr, "cnt: %d\n", ++cnt);
+                if (cnt == 100000)
+                    exit(0);
             }
         }
     }
