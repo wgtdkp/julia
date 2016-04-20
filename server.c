@@ -1,3 +1,6 @@
+#include "connection.h"
+#include "parse.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -18,6 +21,7 @@
 #include <string.h>
 #include <strings.h>
 
+
 #define DEBUG(msg)  fprintf(stderr, "%s\n", (msg));
 
 #define MIN(x, y)   ((x) > (y) ? (y): (x))
@@ -31,6 +35,7 @@
 
 #define IS_DOT(begin, end)  ((end) - (begin) == 1 && *(begin) == '.')
 #define IS_DDOT(begin, end) ((end) - (begin) == 2 && *(begin) == '.' && *((begin) + 1) == '.')
+
 /*
  * root directory of the application;
  * any resource that out of this directory
@@ -42,7 +47,7 @@ static char default_403[256];
 static char default_unimpl[256];
 static char www_dir[256];
 static char http_version[2] = {1, 1};   // http/1.1
-static const char* ext_map[][2] = {
+static const char* mime_map[][2] = {
     {"css",     "text/css"},
     {"htm",     "text/html"},
     {"html",    "text/html"},
@@ -54,74 +59,11 @@ static const char* ext_map[][2] = {
     {"txt",     "text/plain"},
     {"zip",     "application/zip"},
 };
-static const size_t ext_num = sizeof(ext_map) / sizeof(ext_map[0]);
+static const size_t mime_num = sizeof(mime_map) / sizeof(mime_map[0]);
 
 typedef unsigned char bool;
 static const int true = 1;
 static const int false = 0;
-
-typedef struct {
-    int cap;
-    int size;
-    char* data;
-} String;
-
-typedef enum {
-    M_GET,
-    M_POST,
-    M_UNIMP,    //below is not implemented
-    M_PUT,
-    M_DELETE,
-    M_TRACE,
-    M_CONNECT,
-    M_HEAD,
-    M_OPTIONS,
-} Method;
-
-typedef struct {
-    int method;
-    //char* args;
-    //int args_len;
-    int version[2];
-    String* query_string;
-    //entities
-    //char* host;
-    //int host_len;
-    /*
-     * the reuqest header has entity 'connection:keep-alive',
-     * current connection will be closed when recieved request
-     */
-    bool keep_alive;
-
-    int content_length;
-} Request;
-
-typedef enum {
-    RS_OK,
-    RS_NOTFOUND,
-    RS_DENIED, //resource access denied
-} ResourceStat;
-
-typedef struct {
-    //the abs path to the resource
-    char path[255];
-    int path_len;
-    //type: static file or script
-    //ResourceType type;
-    //the status of the resource
-    ResourceStat stat;
-} Resource;
-
-typedef enum {
-    MT_TEXT,
-    MT_HTML,
-    MT_CSS,
-    MT_PLAIN,
-    /* image */
-    MT_IMG,
-    MT_PNG,
-    MT_JPG,
-} MediaType;
 
 typedef struct {
     int status;
@@ -137,93 +79,21 @@ static const Response default_response = {
     .is_script = 0
 };
 
-
-static int get_line(int client, char* buf, int size);
-static inline int empty_line(char* line, int len);
-static Request* create_request(void);
-static void destroy_request(Request** request);
-static Resource* create_resource(void);
-static void destroy_resource(Resource** resource);
-static int get_method(char* str, int len);
-static int parse_request_line(int client, Request* request, Resource* resource);
+static int parse_request_line(int client, Request* request);
 static int parse_request_header(int client, Request* request);
-static int parse_uri(char* sbegin, char* send, Request* request, Resource* resource);
+static int parse_uri(char* sbegin, char* send, Request* request);
 static int fill_resource(Resource* resource, char* begin, char* end);
 static void* handle_request(int client);
-static int put_response(int client, Request* request, Resource* resource, Response* response);
+static int put_response(int client, Response* response);
 static int startup(unsigned short* port);
 static const char* status_repr(int status);
-static void setup_env(Request* request, const char* script_path);
+static void setup_env(Request* request);
 static int transfer_chunk(int des, int src);
 static int cat(int des, int src);
 static int catn(int des, int src, int n);
 static int cats(int des, const char* src, int n);
-static const char* get_type(const char* ext);
+static const char* get_mime_type(const char* ext);
 static void ju_log(const char* format, ...);
-
-static String* create_string(int c);
-static String* destroy_string(String** str);
-static void string_push_back(String* str, char ch);
-
-// param: c: reserve c  bytes
-static String* create_string(int c)
-{
-    String* str = (String*)malloc(sizeof(String));
-    str->size = 0;
-    if (c == 0)
-        str->data = NULL;
-    str->data = (char*)malloc(c * sizeof(char));
-    memset((void*)str->data, 0, c * sizeof(char));
-    str->cap = c;
-    return str;
-}
-
-static String* destroy_string(String** str)
-{
-    free((*str)->data);
-    free(*str);
-    *str = 0;
-}
-
-static void string_push_back(String* str, char ch)
-{
-    if (str->size >= str->cap - 1) {
-        int new_cap = str->cap * 2;
-        char* new_data = (char*)malloc(new_cap * sizeof(char));
-        if (str->size != 0)
-            memcpy(new_data, str->data, str->size);
-        new_data[str->size++] = ch;
-        new_data[str->size] = 0;
-        free(str->data);
-        str->data = new_data;
-        str->cap = new_cap;
-        ++str->size;
-    } else {
-        str->data[str->size++] = ch;
-        str->data[str->size] = 0;
-    }
-}
-
-static int string_append(String* str, const char* p, int len)
-{   
-
-    return 0;
-}
-
-static int string_print(String* str, const char* format, ...)
-{
-    return 0;
-}
-
-static void string_reserve(String* str, int n)
-{
-    if (n <= str->cap)
-        return;
-    str->data = (char*)malloc(n * sizeof(char));
-    memset((void*)str->data, 0, n * sizeof(char));
-    str->cap = n;
-}
-
 
 static inline int is_script(const char* ext)
 {
@@ -232,274 +102,7 @@ static inline int is_script(const char* ext)
     return 0;
 }
 
-static Request* create_request(void)
-{
-    Request* req = (Request*)malloc(sizeof(Request));
-    req->method = M_GET;
-    req->version[0] = req->version[1] = 1;
-    req->query_string = create_string(32);
-    req->keep_alive = false;
-    return req;
-}
-
-static void destroy_request(Request** request)
-{
-    destroy_string(&(*request)->query_string);
-    free(*request);
-    *request = NULL;
-}
-
-static Resource* create_resource(void)
-{
-    Resource* res = (Resource*)malloc(sizeof(Resource));
-    strcpy(res->path, www_dir);
-    res->path_len = strlen(res->path);
-    res->stat = RS_OK;
-    return res;
-}
-
-static void destroy_resource(Resource** resource)
-{
-    free(*resource);
-    *resource = NULL;
-}
-
-/*
-static inline char* dup_tok(char* begin, char* end)
-{
-    int len = end - begin;
-    char* ret = (char*)malloc((len + 1) * sizeof(char));
-    memcpy(ret, begin, len);
-    ret[len] = 0;
-    return ret;
-}
-*/
-
-static inline int empty_line(char* line, int len)
-{
-    return (len >= 2 && line[0] == '\r' && line[1] == '\n') \
-        || (len == 1 && line[0] == '\n');
-}
-
-static int get_method(char* str, int len)
-{
-    if (0 == strncasecmp("GET", str, len))
-        return M_GET;
-    else if (0 == strncasecmp("POST", str, len))
-        return M_POST;
-    else if (0 == strncasecmp("PUT", str, len))
-        return M_PUT;
-    else if (0 == strncasecmp("DELETE", str, len))
-        return M_DELETE;
-    else if (0 == strncasecmp("TRACE", str, len))
-        return M_TRACE;
-    else if (0 == strncasecmp("CONNECT", str, len))
-        return M_CONNECT;
-    else if (0 == strncasecmp("HEAD", str, len))
-        return M_HEAD;
-    else if (0 == strncasecmp("OPTIONS", str, len))
-        return M_OPTIONS;
-    else {
-        int tmp = str[len];
-        str[len] = 0;
-        fprintf(stderr, "unexpected method: %s\n", str);
-        str[len] = tmp;
-        return -1;
-    }
-}
-
-static const char* method_repr(Method method)
-{
-    switch (method) {
-    case M_GET: return "GET";
-    case M_POST: return "POST";
-    case M_OPTIONS: return "OPTIONS";
-    case M_HEAD: return "HEAD";
-    case M_CONNECT: return "CONNECT";
-    case M_TRACE: return "TRACE";
-    case M_DELETE: return "DELETE";
-    case M_PUT: return "PUT";
-    default: return "*";
-    }
-}
-
-//return error
-static int parse_request_line(int client, Request* request, Resource* resource)
-{
-    char buf[1024];
-    int len = get_line(client, buf, sizeof(buf));
-    if (len == -1)
-        return -1;
-    char* begin = buf;
-    char* end = buf;
-    WALK(begin, end);
-    if (*begin == 0)
-        return -1;
-    request->method = get_method(begin, end - begin);
-    if (request->method < 0)
-        return -1;
-    
-    WALK(begin, end);
-
-    parse_uri(begin, end, request, resource);
-    WALK(begin, end);
-    if (0 == strncasecmp("HTTP/1.1", begin, end - begin)) {
-        request->version[0] = request->version[1] = 1;
-    } else if (0 == strncasecmp("HTTP/1.1", begin, end - begin)) {
-        request->version[0] = 1;
-        request->version[1] = 0;
-    }
-    return 0;
-}
-
-//return: -1, error;
-static int parse_request_header(int client, Request* request)
-{
-    char buf[1024];
-    while (1) {
-        int len = get_line(client, buf, sizeof(buf));
-        if (len == -1) return -1;
-        if (0 == len) break; // '\r\n' has already been trimed out
-        char* begin = buf;
-        char* end = buf;
-        WALK_UNTIL(end, ':');
-        if (0 == strncasecmp("Content-Length", begin, end - begin)) {
-            WALK(begin, end);   //skip ':'
-            WALK(begin, end);
-            request->content_length = atoi(begin);
-        } else if (0 == strncasecmp("connection", begin, end - begin)) {
-            WALK(begin, end);
-            WALK(begin, end);
-            if (request->version[0] == 1 && request->version[1] == 0) {
-                request->keep_alive = false;
-                if (0 == strncasecmp("keep-alive", begin, end - begin))
-                    request->keep_alive = true;
-            } else {
-                request->keep_alive = true;
-                if (0 == strncasecmp("close", begin, end - begin))
-                    request->keep_alive = false;
-            }
-        }
-        //TODO(wgtdkp): handle other header entities
-    }
-    return 0;
-}
-
-//return the new length of des
-static inline int tokcat(char* des, int des_len, char* src_begin, char* src_end)
-{
-    int ret = des_len + (src_end - src_begin);
-    memcpy(des + des_len, src_begin, src_end - src_begin);
-    des[ret] = 0;
-    return ret;
-}
-
-static int fill_resource(Resource* resource, char* sbegin, char* send)
-{
-    if (sbegin == send) { //path not explicitly given
-        sbegin = "/";
-        send = sbegin + 1;
-    }
-    //TODO(wgtdkp): check if token(begin, end) is too long
-    resource->path_len = 
-        tokcat(resource->path, resource->path_len, sbegin, send);
-
-    char* begin = sbegin;
-    char* end = sbegin;
-    
-    /*
-     * skip the first '/'(there is always '/' at the beginning)
-     */
-    WALK_UNTIL(end, '/');
-    begin = ++end;
-    
-    /*
-     * check if request resource out of www_dir,
-     * that is: the '../' is more than other entries(except './') until now.
-     */
-    int ddots = 0, dentries = 0;
-    while (1) {
-        WALK_UNTIL(end, '/');
-        if (IS_DDOT(begin, end))
-            ++ddots;
-        else if (end - begin > 0 && !IS_DOT(begin, end))
-            ++dentries;
-        if (ddots > dentries) {
-            resource->stat = RS_DENIED;
-            return 0;
-        }
-        if (*end == 0)
-            break;
-        begin = ++end;
-    }
-    resource->stat = RS_OK;
-
-    struct stat st;
-check:
-    if (stat(resource->path, &st) == -1) {
-        resource->stat = RS_NOTFOUND;
-    } else if (S_ISDIR(st.st_mode)) {
-        /*
-         * it's ok to cat '/' to path, 
-         * even if path is ended by '/'
-         */
-        strcat(resource->path, "/");
-        strcat(resource->path, default_index);
-        resource->path_len += 1 + strlen(default_index);
-        goto check;
-    } else {} //resource is a file
-
-    return 0;
-}
-
-//return: -1, error;
-static int parse_uri(char* sbegin, char* send, Request* request, Resource* resource)
-{   
-
-    char http[] = "http://";
-    int http_len = strlen(http);
-    if (0 == strncasecmp(http, sbegin, http_len))
-        sbegin += http_len;
-    int tmp = *send;
-    *send = 0;
-
-    WALK_UNTIL(sbegin, '/');
-    char* begin = sbegin;
-    WALK_UNTIL(sbegin, '?');
-    char* end = sbegin;
-    fill_resource(resource, begin, end);
-
-    begin = end;
-    WALK(begin, end);
-    if (begin != end)
-        string_append(request->query_string, begin + 1, end - (begin + 1));
-
-    *send = tmp;
-    return 0;
-}
-
-static int get_line(int client, char* buf, int size)
-{
-    int i;
-    for (i = 0; i < size; i++) {
-        // TODO(wgtdkp): read mutlibytes to speed up
-        if (1 != read(client, &buf[i], 1))
-            return -1;
-        if ('\n' == buf[i])
-            break;
-    }
-    /*
-     *trim '\r\n'
-     */
-    if (buf[i] == '\n')
-        buf[i] = 0;
-    if (i >= 1 && buf[i - 1] == '\r')
-        buf[--i] = 0;
-    //DEBUG(buf);
-    return i;
-}
-
-static int handle_cgi(int client, Request* request, Resource* resource)
+static int handle_cgi(int client, Request* request)
 {
     int pid;
     int input[2];
@@ -621,7 +224,7 @@ static int cat(int des, int src)
     char* addr = mmap(NULL, len, PROT_READ, MAP_PRIVATE, src, 0);
     assert(addr != MAP_FAILED);
     // TODO(wgtdkp): handle partial write
-    assert(write(des, addr, len) == len);
+    assert(cats(des, addr, len) == len);
     munmap(addr, len);
     return len;
 }
@@ -704,7 +307,7 @@ static const char* get_extension(Resource* resource)
     }
 }
 
-static const char* get_type(const char* ext)
+static const char* get_mime_type(const char* ext)
 {
     int begin = 0, end = ext_num;
     while (begin <= end) {
@@ -848,25 +451,6 @@ static void usage(void)
                     "    ./julia port www_dir\n");
 }
 
-static void ju_log(const char* format, ...)
-{
-    time_t t = time(NULL);
-    struct tm tm = *localtime(&t);
-    char file_name[64];
-    snprintf(file_name, 64 - 1, "log-%d-%d-%d.txt",
-            tm.tm_year, tm.tm_mon + 1, tm.tm_mday);
-
-    FILE* log_file = fopen(file_name, "a+");
-    if (log_file == NULL)
-        return;
-
-    va_list args;
-    va_start(args, format);
-    vfprintf(log_file, format, args);
-    va_end(args);
-    fclose(log_file);
-}
-
 #define EXIT_ON(cond, msg)  if ((cond)) { perror((msg)); exit(EXIT_FAILURE); }
 
 static inline void set_nonblocking(int fd)
@@ -890,26 +474,21 @@ static inline int event_add(int epoll_fd, int event_fd)
 
 int main(int argc, char* argv[])
 {
-    // 0. arg parsing
     if (argc < 3) {
         usage(); exit(-1);
     }
     config(argv[2]);
 
-    // 1.config
     int server_sock = -1;
     int client_sock = -1;
     unsigned short port = atoi(argv[1]);
-    
 
-    // 2.start server
     server_sock = startup(&port);
     if (server_sock < 0) {
         fprintf(stderr, "startup server failed: %d\n", server_sock);
         exit(-1);
     }
 
-    // 3. listening loop
     printf("julia started...\n");
     printf("doc root: %s\n", www_dir);
     printf("listening at port: %d\n", port);
@@ -921,11 +500,9 @@ int main(int argc, char* argv[])
     EXIT_ON(epoll_fd == -1, "epoll_createl");
 
     event_add(epoll_fd, server_sock);
-    int cnt = 0;
     while (true) {
         int nfds = epoll_wait(epoll_fd, events, nevents, -1);
         EXIT_ON(nfds == -1, "epoll_wait");
-        //fprintf(stderr, "nfds: %d\n", nfds);
         for (int i = 0; i < nfds; i++) {
             if (events[i].data.fd == server_sock) {
                 while (true) {
@@ -943,39 +520,10 @@ int main(int argc, char* argv[])
                 }
             } else {
                 handle_request(events[i].data.fd);
-                //fprintf(stderr, "cnt: %d\n", ++cnt);
-                if (cnt == 100000)
-                    exit(0);
             }
         }
     }
 
-    /*
-    pthread_t request_handler;
-    int i = 0;
-    while (1) {
-        client_sock = accept(server_sock,
-            (struct sockaddr*)&client, &client_len);
-        if (client_sock == -1) {
-            fprintf(stderr, "client connection failed\n");
-        } else {
-            time_t t = time(NULL);
-            struct tm tm = *localtime(&t);
-            //ju_log("[%d:%d:%d] %s: ", tm.tm_hour, tm.tm_min, tm.tm_sec, 
-            //        inet_ntoa(client.sin_addr));
-            //fprintf(stderr, "client[%d]: socket: %d\n", i++, client_sock);
-            
-            int err = pthread_create(&request_handler,
-                NULL, handle_request, client_sock);
-            if (err) {
-                perror("pthread_create");
-                break;
-            }
-            if (++i == 20000)
-                break;
-        }
-    }
-    */
     close(server_sock);
     return 0;
 }
