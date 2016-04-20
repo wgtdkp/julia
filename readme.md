@@ -18,3 +18,10 @@ $ make julia
 ```
 $ sudo ./julia 80 ./www
 ```
+
+### TODO
+1. transfer to epoll async I/O
+2. full functional parser
+3. modularization
+4. keep simple
+ 
