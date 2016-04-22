@@ -1,5 +1,11 @@
 #include "util.h"
 
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+
+
 void ju_log(const char* format, ...)
 {
     time_t t = time(NULL);
@@ -11,6 +17,8 @@ void ju_log(const char* format, ...)
     FILE* log_file = fopen(file_name, "a+");
     if (log_file == NULL)
         return;
+
+    fprintf(log_file, "[%d:%d:%d] ", tm.tm_hour, tm.tm_min, tm.tm_sec);
 
     va_list args;
     va_start(args, format);

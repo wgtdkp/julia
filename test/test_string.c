@@ -12,17 +12,20 @@ void print_string(String* str)
 
 int main(void)
 {
-    String str = string_init(0);
+    String str;
+    string_init(&str, 0);
     print_string(&str);
     char* p = "hello string";
     string_append(&str, p, strlen(p));
     print_string(&str);
     
     p = "111111111111111111111111111111111111111111111111111111111111111111111111111111111111";
-    String str2 = string_init(0);
+    String str2;
+    string_init(&str2, 0);
     string_append(&str2, p, strlen(p));
 
-    String str3 = string_init(0);
+    String str3;
+    string_init(&str3, 0);
     string_append(&str, str2.data, str2.size);
     print_string(&str);
     

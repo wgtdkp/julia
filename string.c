@@ -6,26 +6,21 @@
 #include <stdarg.h>
 #include <assert.h>
 
-
-static const String default_string = {
-    .capacity = 0,
-    .size = 0,
-    .data = NULL
-};
-
 /*
  * string initiator with specific capacity c
  */
-String string_init(int c)
+void string_init(String* str, int c)
 {
-    String str = default_string;
-    if (c <= 0)
-        return str;
-    str.data = (char*)malloc(c * sizeof(char));
+    str->size = 0;
+    if (c <= 0) {
+        str->capacity = 0;
+        str->data = NULL;
+        return;
+    }
+    str->data = (char*)malloc(c * sizeof(char));
     // TODO(wgtdkp): handle malloc error
-    assert(str.data != NULL);
-    str.capacity = c;
-    return str;
+    assert(str->data != NULL);
+    str->capacity = c;
 }
 
 void string_release(String* str)

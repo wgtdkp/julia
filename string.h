@@ -7,7 +7,7 @@ typedef struct {
     char* data;
 } String;
 
-String string_init(int c);
+void string_init(String* str, int c);
 void string_clear(String* str);
 void string_release(String* str);
 void string_push_back(String* str, char ch);

@@ -1,39 +1,21 @@
 #ifndef _JULIA_CONNECTION_H_
 #define _JULIA_CONNECTION_H_
 
-enum {
-    RECV_BUF_SIZE = 4 * 1024,
-};
+#include "request.h"
+#include "response.h"
+#include <sys/epoll.h>
+#include <stdbool.h>
 
-typedef enum {
-    M_GET,
-    M_POST,
-    M_UNIMP,    //below is not implemented
-    M_PUT,
-    M_DELETE,
-    M_TRACE,
-    M_CONNECT,
-    M_HEAD,
-    M_OPTIONS,
-} Method;
-
-typedef struct {
-    Method method;
-    int version[2];
-    String query_string;
-    String path;
-    bool keep_alive;
-    int content_length;
-} Request;
+extern int epoll_fd;
+extern struct epoll_event events[MAX_EVENT_NUM];
 
 typedef struct {
     int fd; // socket fd
-    char buf[RECV_BUF_SIZE];
-    int cur;
     Request request;
     Response response;
-    // # request during this connection
-    int nrequests;
+    int nrequests;  // # request during this connection
+
+    // TODO(wgtdkp): expire time
 } Connection;
 
 typedef enum {
@@ -41,5 +23,13 @@ typedef enum {
     RS_NOTFOUND,
     RS_DENIED, //resource access denied
 } ResourceStat;
+
+Connection* new_connection(int fd);
+void delete_connection(Connection* connection);
+void epoll_init(void);
+void event_add_listen(int* listen_fd);
+void event_add(Connection* connection, int event_flags);
+void event_set_to(Connection* connection, int new_event_flags);
+void event_delete(Connection* connection, int event_flags);
 
 #endif
