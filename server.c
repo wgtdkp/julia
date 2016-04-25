@@ -54,7 +54,7 @@ static int cat(int des, int src);
 static int catn(int des, int src, int n);
 static int cats(int des, const char* src, int n);
 */
-void* handle_request(Connection* connection);
+int handle_request(Connection* connection);
 int put_response(Connection* connection);;
 
 /*
@@ -92,12 +92,50 @@ static void send_test_response(Connection* connection)
     setsockopt(fd, IPPROTO_TCP, TCP_CORK, &on, sizeof(on));
 }
 
-void* handle_request(Connection* connection)
-{
-    int fd = connection->fd;
-    char buffer[1024];
-    read(fd, buffer, 1024);
-    send_test_response(connection);
+int handle_request(Connection* connection)
+{   
+    Request* request = connection->request;
+    Buffer* buffer = request->buffer;
+    bool need_read_again = false;
+    do {
+        int last_buffer_size = buffer->size;
+        int readed = request_read(connection->fd, request);
+        if (readed == 0) {
+            // TODO(wgtdkp): client closed the connection
+        }
+        bool need_parse = false;
+        // The size of the buffer has reached the capacity.
+        // We have to perform parsing, even if the request is not completely received.
+        // This is the extreme situation that the request is longer than our receive buffer(4K).
+        // In this situation we need to read data again, and check if parsing needed.
+        // TODO(wgtdkp): a loop of "read, parse" is needed to handle this situation.
+        if (buffer->size >= buffer->capacity) {
+            need_read_again = true;
+            need_parse = true;
+        } else if {
+            need_parse = request_need_parse(request, last_buffer_size);
+        }
+        if (need_parse) {
+            int err = request_parse(request);
+            if (err != 0) {
+                // TODO(wgtdkp): handle parsing errors,
+                // may send back a "bad request" response.
+                // Refer to RFC 2616 for details.
+            }
+        }
+    } while (need_read_again);
+
+    // TODO(wgtdkp): check if request is all ready(completely parsed)
+
+    // TODO(wgtdkp): perform request
+
+    // TODO(wgtdkp): build and send response
+
+
+    //int fd = connection->fd;
+    //char buffer[1024];
+    //read(fd, buffer, 1024);
+    //send_test_response(connection);
 
     //event_set_to(connection, EVENTS_OUT);
 /*
@@ -384,27 +422,31 @@ static int startup(unsigned short port)
 
     int listen_fd = 0;
     struct sockaddr_in server_addr = {0};
-    int addrlen = sizeof(server_addr);
+    int addr_len = sizeof(server_addr);
     listen_fd = socket(PF_INET, SOCK_STREAM, 0);
     if (listen_fd == -1) {
         return -1;
     }
-    memset((void*)&server_addr, 0, addrlen);
+
+    int on = 1;
+    setsockopt(listen_fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
+
+    memset((void*)&server_addr, 0, addr_len);
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(port);
     server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    if (bind(listen_fd, (struct sockaddr*)&server_addr, addrlen) < 0) {
+    if (bind(listen_fd, (struct sockaddr*)&server_addr, addr_len) < 0) {
         return -1;
     }
 
+    // TODO(wgtdkp): make parameter 'backlog' configurable?
     if (listen(listen_fd, 1024) < 0) {
         return -1;
     }
-    int on = 1;
-    setsockopt(listen_fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
     return listen_fd;
 }
 
+// TODO(wgtdkp): chdir() will do this work
 /*
 static void config(const char* dir)
 {
@@ -459,24 +501,31 @@ int main(int argc, char* argv[])
             EXIT_ON(errno != EINTR, "epoll_wait");
             continue;
         }
+
+        //TODO(wgtdkp): multithreading here: seperate fds to several threads
         for (int i = 0; i < nfds; i++) {
             // Here is a hacking: 
             // Eeven if events[i].data is set to pointer of connection,
             // we can get it's fd correctly(as 'fd' is the first member of struct Connection).
             int fd = *((int*)(events[i].data.ptr));
             if (fd == listen_fd) {
-                while (true) {
-                    struct sockaddr_in client;
-                    socklen_t client_len = sizeof(client);
-                    int connection_fd = accept(fd,
-                            (struct sockaddr*)&client, &client_len);
+                while (true) { // We could accept more than one connection per request
+                    //struct sockaddr_in client;
+                    //socklen_t client_len = sizeof(client);
+                    int connection_fd = accept(fd, NULL, NULL);
+                    //        (struct sockaddr*)&client, &client_len);
                     if (connection_fd == -1) {
                         EXIT_ON((errno != EAGAIN) && (errno != EWOULDBLOCK),
                                 "accept");
                         break;
                     }
                     Connection* connection = new_connection(connection_fd);
-                    event_add(connection, EVENTS_IN);
+                    if (connection == NULL) {
+                        close(connection_fd);
+                        //break;    //???
+                    } else {
+                        event_add(connection, EVENTS_IN);
+                    }
                 }
             } else if (events[i].events & EPOLLIN) {
                 // Receive request or data

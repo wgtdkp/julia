@@ -1,6 +1,7 @@
 #ifndef _JULIA_REQUEST_H_
 #define _JULIA_REQUEST_H_
 
+#include "buffer.h"
 #include "server.h"
 #include "string.h"
 #include <stdbool.h>
@@ -17,19 +18,25 @@ typedef enum {
     M_OPTIONS,
 } Method;
 
+typedef enum {
+    RS_WF_LINE,     // Waiting for request line
+    RS_WF_HEADER,   // Waiting for request header
+    RS_WF_BODY,     // Waiting for request body
+    RS_READY,       // request is ready
+} RequestStatus;
+
 typedef struct {
     Method method;
     int version[2];
     String query_string;
     String path;
-    
+
     /* header entities */
     bool keep_alive;
     int content_length;
 
-    int recv_cur;
-    char recv_buf[RECV_BUF_SIZE];
-    bool ready; // request has been fully constructed
+    Buffer buffer;
+    RequestStatus status;
 } Request;
 
 void request_init(Request* request);

@@ -42,7 +42,7 @@ void request_release(Request* request)
     string_release(&request->path);
 }
 
-// do not free dynamic allocated memory
+// Do not free dynamic allocated memory
 void request_clear(Request* request)
 {
     request_init(request);
@@ -54,6 +54,51 @@ int request_parse(Request* request)
 {
     return 0;
 }
+
+// Read data to buffer
+// Return: bytes readed; 0, indicates end of file;
+int request_read(int fd, Request* request)
+{
+    Buffer* buffer = request->buffer;
+    int readed = 0;
+    do {
+        int margin = buffer->capacity - buffer->size;
+        int len = read(fd, buffer->data + buffer->size, margin);
+        if (len == 0)   // EOF
+            return 0;
+        if (len == -1) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK)
+                break;
+            EXIT_ON(true, "read");  // Unhandled error
+        }
+        readed += len;
+        buffer->size += len;
+    } while (buffer->size < buffer->capacity);  // We may have not read all data
+    return readed;
+}
+
+bool request_need_parse(Request* request, int last_buffer_size)
+{
+    Buffer* buffer = request->buffer;
+    // TODO(wgtdkp): what about waiting for body?
+    // Detect end of request header
+    const char* end_of_header = "\r\n\r\n";
+    const int val = *((int*)end_of_header);
+    // We restart detecting end of header from the last position we stoped
+    char* begin = buffer->data + MAX(last_buffer_size - 4, 0);
+    char* end = buffer->data + buffer->size - 3;
+    // KMP is not really needed here
+    for (char* p = begin; p < end; p++) {
+        if (val == *((int*)p))
+            return true;
+    }
+
+    
+    return false;
+}
+
+/****** lexer ******/
+
 
 /*
 //return error

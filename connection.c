@@ -10,22 +10,29 @@ union ConnectionNode{
     ConnectionNode* next;
 };
 
-static ConnectionNode connections[MAX_CONCURRENT_NUM];
-static ConnectionNode* cur =&connections[0];
+// TODO(wgtdkp): make max concurrent connection configurable ?
+struct {
+    ConnectionNode* cur;
+    ConnectionNode connections[MAX_CONCURRENT_NUM];
+    int allocated;
+} connection_pool = {
+    .cur = NULL,
+    .allocated = 0,
+};
 
 int epoll_fd;
 struct epoll_event events[MAX_EVENT_NUM];
 
 static void set_nonblocking(int fd);
 
-// TODO(wgtdkp): use connecton pool
+// TODO(wgtdkp): lock needed for multithreading
+// Return NULL if connections reaches MAX_CONCURRENT_NUM
 Connection* new_connection(int fd)
 {
-    // cur == NULL means: we are trying to create connections
-    // more that MAX_CONCURRENT_NUM
-    assert(cur != NULL);
+    ConnectionNode* connections = connection_pool.connections;
     static bool connections_inited = false;
     if (!connections_inited) {
+        connection_pool.cur = &connections[0];
         for (int i = 0; i < MAX_CONCURRENT_NUM - 1; i++) {
             connections[i].next = &connections[i + 1];
         }
@@ -33,10 +40,16 @@ Connection* new_connection(int fd)
         connections_inited = true;
     }
 
-    Connection* connection = &cur->connection;
-    // set 'cur' to the next node before initialize connection
-    cur = cur->next;
-    
+    // cur == NULL means: we are trying to create connections
+    // more that MAX_CONCURRENT_NUM
+    if (connection_pool.cur == NULL)
+        return NULL;
+    Connection* connection = &connection_pool.cur->connection;
+    // Set 'cur' to the next node before initialize connection
+    connection_pool.cur = connection_pool.cur->next;
+    ++connection_pool.allocated;
+
+    // Initialization
     connection->fd = fd;
     request_init(&connection->request);
     response_init(&connection->response);
@@ -45,19 +58,20 @@ Connection* new_connection(int fd)
     return connection;
 }
 
+// TODO(wgtdkp): lock needed for multithreading
 void delete_connection(Connection* connection)
 {
     // TODO(wgtdkp): release resource
     request_clear(&connection->request);
     response_clear(&connection->response);
     connection->nrequests = 0;
-    
+
     // insert the deleted connection back to head
-    ConnectionNode* tmp = cur;
-    cur = (ConnectionNode*)connection;
-    cur->next = tmp;
-    
-    // close fd will automatically delete events bind to it
+    ConnectionNode* tmp = connection_pool.cur;
+    connection_pool.cur = (ConnectionNode*)connection;
+    connection_pool.cur->next = tmp;
+    --connection_pool.allocated;
+    // Closing fd will automatically delete events bind to it
     //close(connection->fd);
     //event_delete(connection, EVENTS_IN);
     //event_delete(connection, EVETNS_OUT);
