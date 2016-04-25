@@ -25,7 +25,7 @@ static int get_method(char* str, int len);
 */
 
 /****** request *******/
-void request_init(Request* request)
+void request_init(request_t* request)
 {
     request->method = M_GET;
     request->version[0] = 1;
@@ -36,30 +36,30 @@ void request_init(Request* request)
     request->ready = false;
 }
 
-void request_release(Request* request)
+void request_release(request_t* request)
 {
     string_release(&request->query_string);
     string_release(&request->path);
 }
 
 // Do not free dynamic allocated memory
-void request_clear(Request* request)
+void request_clear(request_t* request)
 {
     request_init(request);
     //string_clear(&request->query_string);
     //string_clear(&request->path);
 }
 
-int request_parse(Request* request)
+int request_parse(request_t* request)
 {
     return 0;
 }
 
 // Read data to buffer
 // Return: bytes readed; 0, indicates end of file;
-int request_read(int fd, Request* request)
+int request_read(int fd, request_t* request)
 {
-    Buffer* buffer = request->buffer;
+    buffer_t* buffer = request->buffer;
     int readed = 0;
     do {
         int margin = buffer->capacity - buffer->size;
@@ -77,9 +77,9 @@ int request_read(int fd, Request* request)
     return readed;
 }
 
-bool request_need_parse(Request* request, int last_buffer_size)
+bool request_need_parse(request_t* request, int last_buffer_size)
 {
-    Buffer* buffer = request->buffer;
+    buffer_t* buffer = request->buffer;
     // TODO(wgtdkp): what about waiting for body?
     // Detect end of request header
     const char* end_of_header = "\r\n\r\n";
@@ -102,7 +102,7 @@ bool request_need_parse(Request* request, int last_buffer_size)
 
 /*
 //return error
-static int parse_request_line(int client, Request* request)
+static int parse_request_line(int client, request_t* request)
 {
     char buf[1024];
     int len = get_line(client, buf, sizeof(buf));
@@ -133,7 +133,7 @@ static int parse_request_line(int client, Request* request)
 
 /*
 //return: -1, error;
-static int parse_request_header(int client, Request* request)
+static int parse_request_header(int client, request_t* request)
 {
     char buf[1024];
     while (1) {
@@ -173,7 +173,7 @@ static int fill_resource(Resource* resource, char* sbegin, char* send)
         sbegin = "/";
         send = sbegin + 1;
     }
-    // TODO(wgtdkp): use String
+    // TODO(wgtdkp): use string_t
     //resource->path_len = 
     //    tokcat(resource->path, resource->path_len, sbegin, send);
 
@@ -223,7 +223,7 @@ check:
 
 /*
 //return: -1, error;
-static int parse_uri(char* sbegin, char* send, Request* request)
+static int parse_uri(char* sbegin, char* send, request_t* request)
 {
     char http[] = "http://";
     int http_len = strlen(http);

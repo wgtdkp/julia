@@ -13,9 +13,9 @@ typedef struct {
     int send_cur;
     char send_buf[SEND_BUF_SIZE];
     bool ready; // response has been fully constructed
-} Response;
+} response_t;
 
-void response_init(Response* response);
-void response_clear(Response* response);
+void response_init(response_t* response);
+void response_clear(response_t* response);
 
 #endif

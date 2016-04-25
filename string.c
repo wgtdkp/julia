@@ -9,7 +9,7 @@
 /*
  * string initiator with specific capacity c
  */
-void string_init(String* str, int c)
+void string_init(string_t* str, int c)
 {
     str->size = 0;
     if (c <= 0) {
@@ -23,19 +23,19 @@ void string_init(String* str, int c)
     str->capacity = c;
 }
 
-void string_release(String* str)
+void string_release(string_t* str)
 {
     str->size = 0;
     free(str->data);
     str->data = NULL;
 }
 
-void string_clear(String* str)
+void string_clear(string_t* str)
 {
     string_resize(str, 0);
 }
 
-void string_push_back(String* str, char ch)
+void string_push_back(string_t* str, char ch)
 {
     if (str->size >= str->capacity - 1)
         string_reserve(str, str->capacity * 2);
@@ -44,7 +44,7 @@ void string_push_back(String* str, char ch)
     str->data[str->size] = 0;
 }
 
-void string_resize(String* str, unsigned new_size)
+void string_resize(string_t* str, unsigned new_size)
 {
     if (new_size + 1 > str->capacity)
         string_reserve(str, new_size + 1);
@@ -58,7 +58,7 @@ void string_resize(String* str, unsigned new_size)
     }
 }
 
-void string_copy(String* des, const char* p, int len)
+void string_copy(string_t* des, const char* p, int len)
 {
     string_reserve(des, len + 1);
     memcpy(des->data, p, len);
@@ -66,7 +66,7 @@ void string_copy(String* des, const char* p, int len)
     des->size = len;
 }
 
-void string_reserve(String* str, int c)
+void string_reserve(string_t* str, int c)
 {
     if (c <= str->capacity)
         return;
@@ -81,7 +81,7 @@ void string_reserve(String* str, int c)
     str->data = new_data;
 }
 
-int string_append(String* str, const char* p, int len)
+int string_append(string_t* str, const char* p, int len)
 {
     string_reserve(str, str->size + len + 1);
     memcpy(str->data + str->size, p, len);
@@ -90,7 +90,7 @@ int string_append(String* str, const char* p, int len)
     return 0;
 }
 
-int string_print(String* str, const char* format, ...)
+int string_print(string_t* str, const char* format, ...)
 {
     va_list args;
     va_start(args, format);

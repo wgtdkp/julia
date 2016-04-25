@@ -51,12 +51,12 @@ static const char* status_repr(int status)
 }
 */
 
-void response_init(Response* response)
+void response_init(response_t* response)
 {
 
 }
 
-void response_clear(Response* response)
+void response_clear(response_t* response)
 {
     response_init(response);
 }

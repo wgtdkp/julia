@@ -4,16 +4,16 @@
 #include <fcntl.h>
 #include <stdio.h>
 
-typedef union ConnectionNode ConnectionNode;
-union ConnectionNode{
-    Connection connection;
-    ConnectionNode* next;
+typedef union connection_tNode connection_tNode;
+union connection_tNode{
+    connection_t connection;
+    connection_tNode* next;
 };
 
 // TODO(wgtdkp): make max concurrent connection configurable ?
 struct {
-    ConnectionNode* cur;
-    ConnectionNode connections[MAX_CONCURRENT_NUM];
+    connection_tNode* cur;
+    connection_tNode connections[MAX_CONCURRENT_NUM];
     int allocated;
 } connection_pool = {
     .cur = NULL,
@@ -27,9 +27,9 @@ static void set_nonblocking(int fd);
 
 // TODO(wgtdkp): lock needed for multithreading
 // Return NULL if connections reaches MAX_CONCURRENT_NUM
-Connection* new_connection(int fd)
+connection_t* new_connection(int fd)
 {
-    ConnectionNode* connections = connection_pool.connections;
+    connection_tNode* connections = connection_pool.connections;
     static bool connections_inited = false;
     if (!connections_inited) {
         connection_pool.cur = &connections[0];
@@ -44,7 +44,7 @@ Connection* new_connection(int fd)
     // more that MAX_CONCURRENT_NUM
     if (connection_pool.cur == NULL)
         return NULL;
-    Connection* connection = &connection_pool.cur->connection;
+    connection_t* connection = &connection_pool.cur->connection;
     // Set 'cur' to the next node before initialize connection
     connection_pool.cur = connection_pool.cur->next;
     ++connection_pool.allocated;
@@ -59,7 +59,7 @@ Connection* new_connection(int fd)
 }
 
 // TODO(wgtdkp): lock needed for multithreading
-void delete_connection(Connection* connection)
+void delete_connection(connection_t* connection)
 {
     // TODO(wgtdkp): release resource
     request_clear(&connection->request);
@@ -67,8 +67,8 @@ void delete_connection(Connection* connection)
     connection->nrequests = 0;
 
     // insert the deleted connection back to head
-    ConnectionNode* tmp = connection_pool.cur;
-    connection_pool.cur = (ConnectionNode*)connection;
+    connection_tNode* tmp = connection_pool.cur;
+    connection_pool.cur = (connection_tNode*)connection;
     connection_pool.cur->next = tmp;
     --connection_pool.allocated;
     // Closing fd will automatically delete events bind to it
@@ -94,7 +94,7 @@ void event_add_listen(int* listen_fd)
             "epoll_ctl: listen_fd");
 }
 
-void event_add(Connection* connection, int event_flags)
+void event_add(connection_t* connection, int event_flags)
 {
     struct epoll_event ev;
     set_nonblocking(connection->fd);
@@ -105,7 +105,7 @@ void event_add(Connection* connection, int event_flags)
             "epoll_ctl: connection_fd");
 }
 
-void event_set_to(Connection* connection, int new_event_flags)
+void event_set_to(connection_t* connection, int new_event_flags)
 {
     struct epoll_event ev;
     set_nonblocking(connection->fd);
@@ -116,7 +116,7 @@ void event_set_to(Connection* connection, int new_event_flags)
             "epoll_ctl: connection_fd");
 }
 
-void event_delete(Connection* connection, int event_flags)
+void event_delete(connection_t* connection, int event_flags)
 {
     struct epoll_event ev;
     ev.events = event_flags;
