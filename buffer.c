@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+
 // Read data to buffer
 // Return: bytes readed; 0, indicates end of file;
 int buffer_read(int fd, buffer_t* buffer)
