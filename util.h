@@ -8,12 +8,12 @@
 
 //typedef unsigned char bool;
 
-static inline min(int x, int y)
+static inline int min(int x, int y)
 {
     return x < y ? x: y;
 }
 
-static inline max(int x, int y)
+static inline int max(int x, int y)
 {
     return x > y ? x: y;
 }

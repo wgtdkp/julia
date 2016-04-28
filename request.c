@@ -25,7 +25,7 @@ static int get_method(char* str, int len);
 */
 
 /****** request *******/
-void request_init(Request* request)
+void request_init(request_t* request)
 {
     request->method = M_GET;
     request->version[0] = 1;
@@ -33,76 +33,35 @@ void request_init(Request* request)
     string_init(&request->query_string, 0);
     string_init(&request->path, 0);
     request->keep_alive = true;
-    request->ready = false;
+    request->status = RS_WF_LINE;
 }
 
-void request_release(Request* request)
+void request_release(request_t* request)
 {
     string_release(&request->query_string);
     string_release(&request->path);
 }
 
 // Do not free dynamic allocated memory
-void request_clear(Request* request)
+void request_clear(request_t* request)
 {
     request_init(request);
     //string_clear(&request->query_string);
     //string_clear(&request->path);
 }
 
-int request_parse(Request* request)
+int request_parse(request_t* request)
 {
     return 0;
 }
 
-// Read data to buffer
-// Return: bytes readed; 0, indicates end of file;
-int request_read(int fd, Request* request)
-{
-    Buffer* buffer = &request->buffer;
-    int readed = 0;
-    do {
-        int margin = buffer->capacity - buffer->size;
-        int len = read(fd, buffer->data + buffer->size, margin);
-        if (len == 0)   // EOF
-            return 0;
-        if (len == -1) {
-            if (errno == EWOULDBLOCK)
-                break;
-            EXIT_ON(true, "read");  // Unhandled error
-        }
-        readed += len;
-        buffer->size += len;
-    } while (buffer->size < buffer->capacity);  // We may have not read all data
-    return readed;
-}
-
-// TODO(wgtdkp): rename this function, maybe 'request_end_of_header'?
-bool request_need_parse(Request* request, int last_buffer_size)
-{
-    Buffer* buffer = &request->buffer;
-    // TODO(wgtdkp): what about waiting for body?
-    // Detect end of request header
-    const char* end_of_header = "\r\n\r\n";
-    const int val = *((int*)end_of_header);
-    // We restart detecting end of header from the last position we stoped
-    char* begin = buffer->data + max(last_buffer_size - 3, 0);
-    char* end = buffer->data + min(buffer->size - 4, 0);
-    // KMP is not really needed here
-    for (char* p = begin; p < end; p++) {
-        if (val == *((int*)p))
-            return true;
-    }
-
-    return false;
-}
 
 /****** lexer ******/
 
 
 /*
 //return error
-static int parse_request_line(int client, Request* request)
+static int parse_request_line(int client, request_t* request)
 {
     char buf[1024];
     int len = get_line(client, buf, sizeof(buf));
@@ -133,7 +92,7 @@ static int parse_request_line(int client, Request* request)
 
 /*
 //return: -1, error;
-static int parse_request_header(int client, Request* request)
+static int parse_request_header(int client, request_t* request)
 {
     char buf[1024];
     while (1) {
@@ -173,7 +132,7 @@ static int fill_resource(Resource* resource, char* sbegin, char* send)
         sbegin = "/";
         send = sbegin + 1;
     }
-    // TODO(wgtdkp): use String
+    // TODO(wgtdkp): use string_t
     //resource->path_len = 
     //    tokcat(resource->path, resource->path_len, sbegin, send);
 
@@ -223,7 +182,7 @@ check:
 
 /*
 //return: -1, error;
-static int parse_uri(char* sbegin, char* send, Request* request)
+static int parse_uri(char* sbegin, char* send, request_t* request)
 {
     char http[] = "http://";
     int http_len = strlen(http);

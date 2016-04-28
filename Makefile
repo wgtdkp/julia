@@ -1,13 +1,19 @@
+TARGET = julia
 
-CC=gcc
-DEFS =-D_XOPEN_SOURCE -D_GNU_SOURCE
-julia:
-	${CC} -pg -std=c11 -pthread  ${DEFS} server.c -o julia
-client:
-	${CC} -std=c11 ${DEFS} client.c -o client
-test:
-	${CC} -std=c11 ${DEFS} ./test/test.c -o ./test/test
-all:
-	make server & make client
+CC = gcc
+SRCS = buffer.c connection.c request.c response.c server.c string.c util.c
+CFLAGS = -pg -std=c11 -Wall -D_XOPEN_SOURCE -D_GNU_SOURCE 
+
+OBJS_DIR = build/
+OBJS = $(SRCS:.c=.o)
+
+$(TARGET): $(OBJS)
+	$(CC) -pg -o $@ $^
+
+%.o: %.c
+	$(CC) $(CFLAGS) -o $@ -c $<
+
+.PHONY: clean
+
 clean:
-	rm julia client
+	-rm -rf $(TARGET) $(OBJS)

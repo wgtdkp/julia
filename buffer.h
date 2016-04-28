@@ -2,7 +2,10 @@
 #define _JULIA_BUFFER_H_
 
 #include "server.h"
+#include "util.h"
+
 #include <memory.h>
+#include <stdbool.h>
 
 /*
  * This buffer is not an universal one.
@@ -23,9 +26,9 @@ typedef struct {
     // And we will never use 'RECV_BUF_SIZE' except for initializing 'capacity'.
     int capacity;
     char data[RECV_BUF_SIZE];
-} Buffer;
+} buffer_t;
 
-static inline void buffer_init(Buffer* buffer)
+static inline void buffer_init(buffer_t* buffer)
 {
     buffer->cur = 0;
     buffer->parsed = 0;
@@ -35,21 +38,21 @@ static inline void buffer_init(Buffer* buffer)
 
 // Get next char in the buffer.
 // Return -1, if no more data in the buffer.
-static inline int buffer_next(Buffer* buffer)
+static inline int buffer_next(buffer_t* buffer)
 {
     if (buffer->cur >= buffer->size)
         return -1;
     return buffer->data[buffer->cur++];
 }
 
-static inline int buffer_peek(Buffer* buffer)
+static inline int buffer_peek(buffer_t* buffer)
 {
     if (buffer->cur >= buffer->size)
         return -1;
     return buffer->data[buffer->cur];
 }
 
-static inline int buffer_append(Buffer* buffer, const char* data, int len)
+static inline int buffer_append(buffer_t* buffer, const char* data, int len)
 {
     int appended_len = min(buffer->capacity - buffer->size, len);
     memcpy(buffer->data + buffer->size, data, appended_len);
@@ -57,14 +60,14 @@ static inline int buffer_append(Buffer* buffer, const char* data, int len)
     return appended_len;
 }
 
-static inline void buffer_mark_parsed(Buffer* buffer)
+static inline void buffer_mark_parsed(buffer_t* buffer)
 {
     buffer->parsed = buffer->cur;
 }
 
 // Discard the received data that has been successfully parsed.
 // The remaining data is copied to the head of the buffer for next parsing.
-static inline void buffer_discard_parsed(Buffer* buffer)
+static inline void buffer_discard_parsed(buffer_t* buffer)
 {
     int remained_begin = buffer->parsed;
     int remained_size = buffer->size - remained_begin;
@@ -75,5 +78,8 @@ static inline void buffer_discard_parsed(Buffer* buffer)
     buffer->parsed = 0;
     buffer->size = remained_size;
 }
+
+int buffer_read(int fd, buffer_t* buffer);
+bool buffer_has_eoh(buffer_t* buffer, int last_buffer_size);
 
 #endif

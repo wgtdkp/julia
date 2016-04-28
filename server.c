@@ -39,7 +39,7 @@ static char www_dir[256];
 //static const int true = 1;
 //static const int false = 0;
 
-static const Response default_response = {
+static const response_t default_response = {
     .status = 200,
     .content_type = "text/html",
     .content_fd = -1,
@@ -48,14 +48,14 @@ static const Response default_response = {
 
 static int startup(unsigned short port);
 /*
-static void setup_env(Request* request);
+static void setup_env(request_t* request);
 static int transfer_chunk(int des, int src);
 static int cat(int des, int src);
 static int catn(int des, int src, int n);
 static int cats(int des, const char* src, int n);
 */
-int handle_request(Connection* connection);
-int put_response(Connection* connection);;
+int handle_request(connection_t* connection);
+int put_response(connection_t* connection);;
 
 /*
 static inline int is_script(const char* ext)
@@ -66,7 +66,7 @@ static inline int is_script(const char* ext)
 }
 */
 
-static void send_test_response(Connection* connection)
+static void send_test_response(connection_t* connection)
 {
     int fd = connection->fd;
     // TODO(wgtdkp): try to understanding this setting!!!
@@ -81,7 +81,7 @@ static void send_test_response(Connection* connection)
     sprintf(buffer, "HTTP/1.0 200 OK\r\n"
                    "Server: julia\r\n"
                    "Content-Type: text/html\r\n"
-                   "Connection: Keep-Alive\r\n"
+                   "connection_t: Keep-Alive\r\n"
                    "Content-Length: 997\r\n\r\n");
     send(fd, buffer, strlen(buffer), 0);
     memset(buffer, 65, 997);
@@ -92,14 +92,14 @@ static void send_test_response(Connection* connection)
     setsockopt(fd, IPPROTO_TCP, TCP_CORK, &on, sizeof(on));
 }
 
-int handle_request(Connection* connection)
+int handle_request(connection_t* connection)
 {
-    Request* request = connection->request;
-    Buffer* buffer = &request->buffer;
+    request_t* request = &connection->request;
+    buffer_t* buffer = &request->buffer;
     bool need_read_again = false;
     do {
         int last_buffer_size = buffer->size;
-        int readed = request_read(connection->fd, request);
+        int readed = buffer_read(connection->fd, buffer);
         if (readed == 0) {
             // TODO(wgtdkp): client closed the connection
         }
@@ -112,8 +112,8 @@ int handle_request(Connection* connection)
         if (buffer->size >= buffer->capacity) {
             need_read_again = true;
             need_parse = true;
-        } else if {
-            need_parse = request_need_parse(request, last_buffer_size);
+        } else {
+            need_parse = buffer_has_eoh(buffer, last_buffer_size);
         }
         if (need_parse) {
             int err = request_parse(request);
@@ -142,8 +142,8 @@ int handle_request(Connection* connection)
     //int client = *((int*)args);
     while (true) {
         bool keep_alive = false;
-        //Buffer* request_buf = create_buffer(100);
-        Request* request = create_request();
+        //buffer_t* request_buf = create_buffer(100);
+        request_t* request = create_request();
         Resource* resource = create_resource();
         if (0 != parse_request_line(client, request, resource))
             goto close;
@@ -153,7 +153,7 @@ int handle_request(Connection* connection)
         keep_alive = request->keep_alive;
         //ju_log("%s %s \n", method_repr(request->method), resource->path);
 
-        Response response = default_response;
+        response_t response = default_response;
 
         if (request->method != M_GET && request->method != M_POST) {
             response.status = 501;
@@ -210,12 +210,12 @@ int handle_request(Connection* connection)
         }
     }
 */
-    return NULL;
+    return 0;
 }
 
 
 // TODO(wgtdkp): use sendfile() for static resource
-int put_response(Connection* connection)
+int put_response(connection_t* connection)
 {
     assert(0);
     send_test_response(connection);
@@ -261,7 +261,7 @@ int put_response(Connection* connection)
 }
 
 /*
-static int handle_cgi(int client, Request* request)
+static int handle_cgi(int client, request_t* request)
 {
     int pid;
     int input[2];
@@ -346,7 +346,7 @@ static int cats(int des, const char* src, int n)
 */
 
 /*
-static void setup_env(Request* request, const char* script_path)
+static void setup_env(request_t* request, const char* script_path)
 {
     // [POS34-C]: Do not call putenv() with a pointer to an automatic variable as the argument
     // as putenv() just do copy the pointer! so each enrivonment needs a buffer.
@@ -506,7 +506,7 @@ int main(int argc, char* argv[])
         for (int i = 0; i < nfds; i++) {
             // Here is a hacking: 
             // Eeven if events[i].data is set to pointer of connection,
-            // we can get it's fd correctly(as 'fd' is the first member of struct Connection).
+            // we can get it's fd correctly(as 'fd' is the first member of struct connection_t).
             int fd = *((int*)(events[i].data.ptr));
             if (fd == listen_fd) {
                 while (true) { // We could accept more than one connection per request
@@ -519,7 +519,7 @@ int main(int argc, char* argv[])
                                 "accept");
                         break;
                     }
-                    Connection* connection = new_connection(connection_fd);
+                    connection_t* connection = new_connection(connection_fd);
                     if (connection == NULL) {
                         close(connection_fd);
                         //break;    //???
@@ -531,13 +531,13 @@ int main(int argc, char* argv[])
             }
             if (events[i].events & EPOLLIN) {
                 // Receive request or data
-                Connection* connection = (Connection*)(events[i].data.ptr);
+                connection_t* connection = (connection_t*)(events[i].data.ptr);
                 handle_request(connection);
             }
             // TODO(wgtdkp): checking errors?
             if (events[i].events & EPOLLOUT) {
                 // Send response
-                Connection* connection = (Connection*)(events[i].data.ptr);
+                connection_t* connection = (connection_t*)(events[i].data.ptr);
                 put_response(connection);
             }
         }

@@ -23,25 +23,25 @@ typedef enum {
     RS_WF_HEADER,   // Waiting for request header
     RS_WF_BODY,     // Waiting for request body
     RS_READY,       // request is ready
-} RequestStatus;
+} request_tatus_t;
 
 typedef struct {
     Method method;
     int version[2];
-    String query_string;
-    String path;
+    string_t query_string;
+    string_t path;
 
     /* header entities */
     bool keep_alive;
     int content_length;
 
-    Buffer buffer;
-    RequestStatus status;
-} Request;
+    buffer_t buffer;
+    request_tatus_t status;
+} request_t;
 
-void request_init(Request* request);
-void request_release(Request* request);
-void request_clear(Request* request);
-int request_parse(Request* request);
+void request_init(request_t* request);
+void request_release(request_t* request);
+void request_clear(request_t* request);
+int request_parse(request_t* request);
 
 #endif
