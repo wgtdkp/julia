@@ -59,7 +59,7 @@ int request_parse(Request* request)
 // Return: bytes readed; 0, indicates end of file;
 int request_read(int fd, Request* request)
 {
-    Buffer* buffer = request->buffer;
+    Buffer* buffer = &request->buffer;
     int readed = 0;
     do {
         int margin = buffer->capacity - buffer->size;
@@ -67,7 +67,7 @@ int request_read(int fd, Request* request)
         if (len == 0)   // EOF
             return 0;
         if (len == -1) {
-            if (errno == EAGAIN || errno == EWOULDBLOCK)
+            if (errno == EWOULDBLOCK)
                 break;
             EXIT_ON(true, "read");  // Unhandled error
         }
@@ -77,23 +77,23 @@ int request_read(int fd, Request* request)
     return readed;
 }
 
+// TODO(wgtdkp): rename this function, maybe 'request_end_of_header'?
 bool request_need_parse(Request* request, int last_buffer_size)
 {
-    Buffer* buffer = request->buffer;
+    Buffer* buffer = &request->buffer;
     // TODO(wgtdkp): what about waiting for body?
     // Detect end of request header
     const char* end_of_header = "\r\n\r\n";
     const int val = *((int*)end_of_header);
     // We restart detecting end of header from the last position we stoped
-    char* begin = buffer->data + MAX(last_buffer_size - 4, 0);
-    char* end = buffer->data + buffer->size - 3;
+    char* begin = buffer->data + max(last_buffer_size - 3, 0);
+    char* end = buffer->data + min(buffer->size - 4, 0);
     // KMP is not really needed here
     for (char* p = begin; p < end; p++) {
         if (val == *((int*)p))
             return true;
     }
 
-    
     return false;
 }
 

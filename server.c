@@ -93,9 +93,9 @@ static void send_test_response(Connection* connection)
 }
 
 int handle_request(Connection* connection)
-{   
+{
     Request* request = connection->request;
-    Buffer* buffer = request->buffer;
+    Buffer* buffer = &request->buffer;
     bool need_read_again = false;
     do {
         int last_buffer_size = buffer->size;
@@ -401,7 +401,7 @@ static int catn(int des, int src, int n)
     char buf[buf_size];
     int len, readed = 0;
     do {
-        int size = MIN(buf_size, n);
+        int size = min(buf_size, n);
         len = read(src, buf, size);
         if (len < 0) break;
         write(des, buf, len);
@@ -527,17 +527,18 @@ int main(int argc, char* argv[])
                         event_add(connection, EVENTS_IN);
                     }
                 }
-            } else if (events[i].events & EPOLLIN) {
+                continue;
+            }
+            if (events[i].events & EPOLLIN) {
                 // Receive request or data
                 Connection* connection = (Connection*)(events[i].data.ptr);
                 handle_request(connection);
-            } else if (events[i].events & EPOLLOUT) {
+            }
+            // TODO(wgtdkp): checking errors?
+            if (events[i].events & EPOLLOUT) {
                 // Send response
                 Connection* connection = (Connection*)(events[i].data.ptr);
                 put_response(connection);
-            } else {
-                // Neither epoll in or out event
-                EXIT_ON(true, "epoll_wait");
             }
         }
     }
