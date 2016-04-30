@@ -9,19 +9,13 @@
 ```shell
 $ make julia
 ```
-### DEPENDENCIES
-1. to support php script, you need php5-cgi
-```
-     $ sudo apt-get install php5-cgi
-```
+
 ### RUN
 ```
 $ sudo ./julia 80 ./www
 ```
 
 ### TODO
-1. transfer to epoll async I/O
-2. full functional parser
-3. modularization
-4. keep simple
+1. full functional parser
+2. keep simple
  
