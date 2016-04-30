@@ -1,0 +1,497 @@
+/* 
+ * Based on nginx ngx_http_parse.c
+ */
+
+#include "parse.h"
+#include "buffer.h"
+#include "request.h"
+#include "util.h"
+
+#include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+#define STR2_EQ(p, q)   ((p)[0] == (q)[0] && (p)[1] == (q)[1])
+#define STR3_EQ(p, q)   (STR2_EQ(p, q) && (p)[2] == (q)[2])
+#define STR4_EQ(p, q)   (STR2_EQ(p, q) && STR2_EQ(p + 2, q + 2))
+#define STR5_EQ(p, q)   (STR2_EQ(p, q) && STR3_EQ(p + 2, q + 2))
+#define STR6_EQ(p, q)   (STR3_EQ(p, q) && STR3_EQ(p + 3, q + 3))
+#define STR7_EQ(p, q)   (STR3_EQ(p, q) && STR4_EQ(p + 3, q + 3))
+
+#define IS_DIGIT(ch)    (ch >= '0' && ch <= '9')
+
+#define IS_UPALPHA(ch)  ((ch) >= 'A' && (ch) <= 'Z')
+#define IS_LOALPHA(ch)  ((ch) >= 'a' && (ch) <= 'z')
+#define IS_ALPHA(ch)    (IS_LOALPHA(ch) || IS_UPALPHA(ch))
+
+#define TO_LOWCASE(ch)  ((ch) | 0x20)
+
+
+#define ERR_ON(cond, err)   \
+do {                        \
+    if (cond)               \
+        return (err);       \
+} while (0)
+
+/*
+static const char token_tb[128] = {
+    0, 0, 0, 0, 0, 0, 0, 0, // 7
+    0, 0, 0, 0, 0, 0, 0, 0, // 15
+    0, 0, 0, 0, 0, 0, 0, 0, // 23
+    0, 0, 0, 0, 0, 0, 0, 0, // 31
+    0, 0, 0, 0, 0, 0, 0, 0, // 39
+    0, 0, 0, 0, 0, 0, 0, 0, // 47
+    0, 0, 0, 0, 0, 0, 0, 0, // 55
+    0, 0, 0, 0, 0, 0, 0, 0, // 63
+    0, 1, 1, 1, 1, 1, 1, 1, // 71
+    1, 1, 0, 0, 0, 0, 0, 0, // 79
+    0, 0, 0, 0, 0, 0, 0, 0, // 87
+    0, 0, 0, 0, 0, 0, 0, 0, // 95
+    0, 0, 0, 0, 0, 0, 0, 0, // 103
+    0, 0, 0, 0, 0, 0, 0, 0, // 111
+    0, 0, 0, 0, 0, 0, 0, 0, // 119
+    0, 0, 0, 0, 0, 0, 0, 0, // 127
+};
+*/
+
+int request_parse(request_t* request)
+{
+    // 0. parse request line
+    int err = parse_request_line(request);
+    // 1. parse header entities
+
+    // 2. parse header body
+    return err;
+}
+
+// State machine: request line states
+enum {
+    RLS_BEGIN = 0,
+    RLS_METHOD,
+    RLS_SP_BEFORE_URI,
+    RLS_URI_SLASH,
+    RLS_URI_ASTERIK,
+    RLS_SCHEMA,
+    RLS_SCHEMA_COLON,
+    RLS_SCHEMA_SLASH,
+    RLS_SCHEMA_SLASH_SLASH,
+    RLS_HOST_IP_LITERAL,
+    RLS_HOST,
+    RLS_HOST_END,
+    RLS_PORT,
+    RLS_SP_BEFROE_VERSION,
+    RLS_HTTP_H,
+    RLS_HTTP_HT,
+    RLS_HTTP_HTT,
+    RLS_HTTP_HTTP,
+    RLS_HTTP_VERSION_SLASH,
+    RLS_HTTP_VERSION_MAJOR,
+    RLS_HTTP_VERSION_DOT,
+    RLS_HTTP_VERSION_MINOR,
+    RLS_SP_AFTER_VERSION,
+    RLS_ALMOST_DONE,
+    RLS_DONE,
+};
+
+int parse_request_line(request_t* request)
+{
+    buffer_t* buffer = &request->buffer;
+    char* p;
+    for (p = buffer->begin; p < buffer->end; p++) {
+        char ch = *p;
+        
+        switch (request->state) {
+        case RLS_BEGIN:
+            request->request_line_begin = p;
+            request->method_begin = p;
+            ERR_ON(!IS_UPALPHA(ch), ERR_INVALID_REQUEST);
+            request->state = RLS_METHOD;
+            break;
+
+        case RLS_METHOD:
+            if (IS_UPALPHA(ch))
+                break;
+            ERR_ON(ch != ' ', ERR_INVALID_METHOD);
+            
+            // End of method
+            char* m = request->method_begin;
+            int len = p - m;
+            switch (len) {
+            case 3:
+                if (STR3_EQ(m, "GET"))
+                    request->method = M_GET;
+                else if(STR3_EQ(m, "PUT"))
+                    request->method = M_PUT;
+                else
+                    return ERR_INVALID_METHOD;
+                break;
+            case 4:
+                if (STR4_EQ(m, "POST"))
+                    request->method = M_POST;
+                else if (STR4_EQ(m, "HEAD"))
+                    request->method = M_HEAD;
+                else
+                    return ERR_INVALID_METHOD;
+                break;
+            case 5:
+                if (STR5_EQ(m, "TRACE"))
+                    request->method = M_TRACE;
+                else
+                    return ERR_INVALID_METHOD;
+                break;
+            case 6:
+                if (STR6_EQ(m, "DELETE"))
+                    request->method = M_DELETE;
+                else
+                    return ERR_INVALID_METHOD;
+                break;
+            case 7:
+                if (STR7_EQ(m, "CONNECT"))
+                    request->method = M_CONNECT;
+                else if (STR7_EQ(m, "OPTIONS"))
+                    request->method = M_OPTIONS;
+                else
+                    return ERR_INVALID_METHOD;
+                break;
+            default:
+                return ERR_INVALID_METHOD;
+            }
+            request->state = RLS_SP_BEFORE_URI;
+            break;
+
+        case RLS_SP_BEFORE_URI:
+            // RFC 2616:
+            // Request-URI    = "*" | absoluteURI | abs_path | authority
+            // absoluteURI: FIRST set: {alpha}
+            // abs_path:    FIRST set: {'/'}
+            // authority ?
+            if (ch == '/') {
+                request->uri_begin = p;
+                request->state = RLS_URI_SLASH;
+                break;
+            } else if (ch == '*') {
+                request->uri_begin = p;
+                request->state = RLS_URI_ASTERIK;
+                break;
+            }
+
+            if (IS_ALPHA(ch)) {
+                request->schema_begin = p;
+                request->state = RLS_SCHEMA;
+                break;
+            }
+            ERR_ON(ch != ' ', ERR_INVALID_REQUEST);
+            break;
+
+        case RLS_SCHEMA:
+            switch (ch) {
+            case 'A' ... 'Z':
+            case 'a' ... 'z':
+            case '0' ... '9':
+            case '+':
+            case '-':
+            case '.':
+                break;
+            case ':':
+                request->schema_end = p;
+                request->state = RLS_SCHEMA_COLON;
+                break;
+            default:
+                return ERR_INVALID_REQUEST;
+            }
+            break;
+
+        case RLS_SCHEMA_COLON:
+            switch (ch) {
+            case '/':
+                request->state = RLS_SCHEMA_SLASH;
+                break;
+            default:
+                return ERR_INVALID_REQUEST;
+            }
+            break;
+
+        case RLS_SCHEMA_SLASH:
+            switch (ch) {
+            case '/':
+                request->state = RLS_SCHEMA_SLASH_SLASH;
+                break;
+            default:
+                return ERR_INVALID_REQUEST;
+            }
+            break;
+
+        case RLS_SCHEMA_SLASH_SLASH:
+            request->host_begin = p;
+            if (ch == '[') {
+                request->state = RLS_HOST_IP_LITERAL;
+                break;
+            }
+            request->state = RLS_HOST;
+            // Fall through
+        case RLS_HOST:
+            switch (ch) {
+            case 'A' ... 'Z':
+            case 'a' ... 'z':
+            case '0' ... '9':
+            case '.':
+            case '-':
+                goto end_state_switch;
+            }
+            // Fall through
+        case RLS_HOST_END:
+            request->host_end = p;
+            switch (ch) {
+            case ':':
+                request->state = RLS_PORT;
+                break;
+            case '/':
+                request->uri_begin = p;
+                request->state = RLS_URI_SLASH;
+                break;
+            case ' ':
+                // Must ended by '/'
+            default:
+                return ERR_INVALID_REQUEST;
+            }
+            break;
+
+        case RLS_HOST_IP_LITERAL:
+            // "[" 1*(digit | ".") "]"
+            switch (ch) {
+            case '0' ... '9':
+            case '.':
+                break;
+            case ']':
+                request->state = RLS_HOST_END;
+                break;
+            default:
+                return ERR_INVALID_REQUEST;
+            }
+            break;
+
+        case RLS_PORT:
+            switch (ch) {
+            case '0' ... '9':
+                break;
+            case '/':
+                request->uri_begin = p;
+                request->state = RLS_URI_SLASH;
+                break;
+            case ' ':
+            default:
+                return ERR_INVALID_REQUEST;
+            }
+            break;
+
+        case RLS_URI_SLASH:
+            switch (ch) {
+            case ' ':
+                request->uri_end = p;
+                request->state = RLS_SP_BEFROE_VERSION;
+                break;
+            case '\t':
+            case '\r':
+            case '\n':
+                return ERR_INVALID_REQUEST;
+            default:
+                break;
+            }
+            break;
+
+        case RLS_SP_BEFROE_VERSION:
+            switch (ch) {
+            case ' ':
+                break;
+            case 'H':
+                request->state = RLS_HTTP_H;
+                break;
+            }
+            break;
+
+        // Is "HTTP/major.minor" case-sensitive?
+        case RLS_HTTP_H:
+            ERR_ON(ch != 'T', ERR_INVALID_REQUEST);
+            request->state = RLS_HTTP_HT;
+            break;
+
+        case RLS_HTTP_HT:
+            ERR_ON(ch != 'T', ERR_INVALID_REQUEST);
+            request->state = RLS_HTTP_HTT;
+            break;
+
+        case RLS_HTTP_HTT:
+            ERR_ON(ch != 'P', ERR_INVALID_REQUEST);
+            request->state = RLS_HTTP_HTTP;
+            break;
+
+        case RLS_HTTP_HTTP:
+            ERR_ON(ch != '/', ERR_INVALID_REQUEST);
+            request->state = RLS_HTTP_VERSION_SLASH;
+            break;
+
+        case RLS_HTTP_VERSION_SLASH:
+            switch (ch) {
+            case '0' ... '9':
+                request->version.major =
+                        request->version.major * 10 + ch - '0';
+                request->state = RLS_HTTP_VERSION_MAJOR;
+                break;
+            default:
+                return ERR_INVALID_REQUEST;
+            }
+            break;
+
+        case RLS_HTTP_VERSION_MAJOR:
+            switch (ch) {
+            case '0' ... '9':
+                request->version.major =
+                        request->version.major * 10 + ch - '0';
+                ERR_ON(request->version.major > 999, ERR_INVALID_VERSION);
+                break;
+            case '.':
+                request->state = RLS_HTTP_VERSION_DOT;
+                break;
+            default:
+                return ERR_INVALID_REQUEST;
+            }
+            break;
+
+        case RLS_HTTP_VERSION_DOT:
+            switch (ch) {
+            case '0' ... '9':
+                request->version.minor =
+                        request->version.minor * 10 + ch - '0';
+                request->state = RLS_HTTP_VERSION_MINOR;
+                break;
+            default:
+                return ERR_INVALID_REQUEST;
+            }
+            break;
+
+        case RLS_HTTP_VERSION_MINOR:
+            switch (ch) {
+            case '0' ... '9':
+                request->version.minor =
+                        request->version.minor * 10 + ch - '0';
+                ERR_ON(request->version.minor > 999, ERR_INVALID_VERSION);
+                break;
+            case ' ':
+                request->state = RLS_SP_AFTER_VERSION;
+                break;
+            case '\r':
+                request->state = RLS_ALMOST_DONE;
+                break;
+            case '\n':
+                goto done;
+            default:
+                return ERR_INVALID_REQUEST;
+            }
+            break;
+
+        case RLS_SP_AFTER_VERSION:
+            switch (ch) {
+            case ' ':
+                break;
+            case '\r':
+                request->state = RLS_ALMOST_DONE;
+                break;
+            case '\n':
+            default:
+                return ERR_INVALID_REQUEST;
+            }
+            break;
+
+        case RLS_ALMOST_DONE:
+            ERR_ON(ch != '\n', ERR_INVALID_REQUEST);
+            goto done;
+
+        default:
+            assert(0);
+        }
+
+    end_state_switch:;
+    }
+
+    buffer->begin = buffer->end;
+    return OK;
+
+done:
+    request->request_line_done = true;
+    buffer->begin = p + 1;
+    request->request_line_end = p;
+    request->state = RLS_BEGIN;
+    return OK;
+}
+
+/* URI Generic syntax
+    URI-reference = [ absoluteURI | relativeURI ] [ "#" fragment ]
+    absoluteURI   = scheme ":" ( hier_part | opaque_part )
+    relativeURI   = ( net_path | abs_path | rel_path ) [ "?" query ]
+
+    hier_part     = ( net_path | abs_path ) [ "?" query ]
+    opaque_part   = uric_no_slash *uric
+
+    uric_no_slash = unreserved | escaped | ";" | "?" | ":" | "@" |
+                  "&" | "=" | "+" | "$" | ","
+
+    net_path      = "//" authority [ abs_path ]
+    abs_path      = "/"  path_segments
+    rel_path      = rel_segment [ abs_path ]
+
+    rel_segment   = 1*( unreserved | escaped |
+                      ";" | "@" | "&" | "=" | "+" | "$" | "," )
+
+    scheme        = alpha *( alpha | digit | "+" | "-" | "." )
+
+    authority     = server | reg_name
+
+    reg_name      = 1*( unreserved | escaped | "$" | "," |
+                      ";" | ":" | "@" | "&" | "=" | "+" )
+
+    server        = [ [ userinfo "@" ] hostport ]
+    userinfo      = *( unreserved | escaped |
+                     ";" | ":" | "&" | "=" | "+" | "$" | "," )
+
+    hostport      = host [ ":" port ]
+    host          = hostname | IPv4address
+    hostname      = *( domainlabel "." ) toplabel [ "." ]
+    domainlabel   = alphanum | alphanum *( alphanum | "-" ) alphanum
+    toplabel      = alpha | alpha *( alphanum | "-" ) alphanum
+    IPv4address   = 1*digit "." 1*digit "." 1*digit "." 1*digit
+    port          = *digit
+
+    path          = [ abs_path | opaque_part ]
+    path_segments = segment *( "/" segment )
+    segment       = *pchar *( ";" param )
+    param         = *pchar
+    pchar         = unreserved | escaped |
+                  ":" | "@" | "&" | "=" | "+" | "$" | ","
+
+    query         = *uric
+
+    fragment      = *uric
+
+    uric          = reserved | unreserved | escaped
+    reserved      = ";" | "/" | "?" | ":" | "@" | "&" | "=" | "+" |
+                  "$" | ","
+    unreserved    = alphanum | mark
+    mark          = "-" | "_" | "." | "!" | "~" | "*" | "'" |
+                  "(" | ")"
+
+    escaped       = "%" hex hex
+    hex           = digit | "A" | "B" | "C" | "D" | "E" | "F" |
+                          "a" | "b" | "c" | "d" | "e" | "f"
+
+    alphanum      = alpha | digit
+    alpha         = lowalpha | upalpha
+
+    lowalpha = "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" |
+             "j" | "k" | "l" | "m" | "n" | "o" | "p" | "q" | "r" |
+             "s" | "t" | "u" | "v" | "w" | "x" | "y" | "z"
+    upalpha  = "A" | "B" | "C" | "D" | "E" | "F" | "G" | "H" | "I" |
+             "J" | "K" | "L" | "M" | "N" | "O" | "P" | "Q" | "R" |
+             "S" | "T" | "U" | "V" | "W" | "X" | "Y" | "Z"
+    digit    = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" |
+             "8" | "9"
+*/

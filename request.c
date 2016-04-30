@@ -1,6 +1,10 @@
 #include "request.h"
+#include "buffer.h"
+#include "parse.h"
+#include "string.h"
 #include "util.h"
 
+#include <assert.h>
 #include <ctype.h>
 #include <memory.h>
 #include <stdio.h>
@@ -18,6 +22,28 @@
 #define IS_DDOT(begin, end) ((end) - (begin) == 2 && *(begin) == '.' && *((begin) + 1) == '.')
 
 
+static int dump_request(request_t* request)
+{
+    printf("status: %d\n", request->status);
+    printf("method: %d\n", request->method);
+    printf("version: %d.%d\n", request->version.major, request->version.minor);
+    print_string("request_line: %*s\n", request->request_line_begin,
+            request->request_line_end - request->request_line_begin);
+    print_string("uri: %*s\n", request->uri_begin,
+            request->uri_end - request->uri_begin);
+    print_string("schema: %*s\n", request->schema_begin,
+            request->schema_end - request->schema_begin);
+    print_string("host: %*s\n", request->host_begin,
+            request->host_end - request->host_begin);
+    printf("state: %d\n", request->state);
+    printf("reuqest_line_done: %d\n", request->request_line_done);
+    printf("keep_alive: %d\n", request->keep_alive);
+    printf("saw_eof: %d\n", request->saw_eof);
+    printf("buffer size: %d\n", buffer_size(&request->buffer));
+    fflush(stdout);
+    return 0;
+}
+
 /*
 static const char* method_repr(Method method);
 static int get_line(int client, char* buf, int size);
@@ -27,19 +53,32 @@ static int get_method(char* str, int len);
 /****** request *******/
 void request_init(request_t* request)
 {
-    request->method = M_GET;
-    request->version[0] = 1;
-    request->version[1] = 1;
-    string_init(&request->query_string, 0);
-    string_init(&request->path, 0);
-    request->keep_alive = true;
-    request->status = RS_WF_LINE;
+    request->status = 400;
+    request->method = M_GET;    // Any value is ok
+    request->version.major = 0;
+    request->version.minor = 0;
+
+    request->request_line_begin = NULL;
+    request->request_line_end = NULL;
+    request->method_begin = NULL;
+    request->uri_begin = NULL;
+    request->uri_end = NULL;
+    request->schema_begin = NULL;
+    request->schema_end = NULL;
+    request->host_begin = NULL;
+    request->host_end = NULL;
+
+    request->state = 0;
+    request->request_line_done = false;
+    request->keep_alive = false;
+    request->saw_eof = false;
+
+    buffer_init(&request->buffer);
 }
 
 void request_release(request_t* request)
 {
-    string_release(&request->query_string);
-    string_release(&request->path);
+    // TODO(wgtdkp): release dynamic allocated resource
 }
 
 // Do not free dynamic allocated memory
@@ -50,9 +89,140 @@ void request_clear(request_t* request)
     //string_clear(&request->path);
 }
 
-int request_parse(request_t* request)
+int handle_request(connection_t* connection)
 {
+    request_t* request = &connection->request;
+    buffer_t* buffer = &request->buffer;
+    int readed = buffer_read(connection->fd, buffer);
+    
+    // Client closed the connection
+    if (readed <= 0) {
+        readed = -readed;
+        request->saw_eof = true;
+        // TODO(wgtdkp): remove EPOLLINT events
+    }
+
+    if (buffer_size(buffer) > 0)
+        print_string("recv data: %*s\n", buffer->begin, buffer_size(buffer));
+    
+    int err = request_parse(request);
+    if (err != OK) {
+        // TODO(wgtdkp): update request state
+        // Response bad request
+        printf("err: %d\n", err);
+        fflush(stdout);
+        connection_close(connection);
+        dump_request(request);
+        //assert(0);
+    }
+
+    // TOD(wgtdkp): process headers
+
+    if (buffer->end >= buffer->limit) {
+        // TODO(wgtdkp): too bigger request header
+        assert(0);
+    }
+
+    if (request->request_line_done) {
+        printf("parse request line done\n");
+        fflush(stdout);
+    }
+
+    // DEBUG: 
+    if (request->saw_eof) {
+        printf("connection closed\n");
+        fflush(stdout);
+        connection_close(connection);
+        dump_request(request);
+    }
+
     return 0;
+
+    // TODO(wgtdkp): check if request is all ready(completely parsed)
+
+    // TODO(wgtdkp): perform request
+
+    // TODO(wgtdkp): build and send response
+
+
+    //int fd = connection->fd;
+    //char buffer[1024];
+    //read(fd, buffer, 1024);
+    //send_test_response(connection);
+
+    //event_set_to(connection, EVENTS_OUT);
+/*
+    //int client = *((int*)args);
+    while (true) {
+        bool keep_alive = false;
+        //buffer_t* request_buf = create_buffer(100);
+        request_t* request = create_request();
+        Resource* resource = create_resource();
+        if (0 != parse_request_line(client, request, resource))
+            goto close;
+        if (0 != parse_request_header(client, request))
+            goto close;
+
+        keep_alive = request->keep_alive;
+        //ju_log("%s %s \n", method_repr(request->method), resource->path);
+
+        response_t response = default_response;
+
+        if (request->method != M_GET && request->method != M_POST) {
+            response.status = 501;
+            response.content_type = "text/html";
+            response.content_fd = open(default_unimpl, O_RDONLY, 00777);
+            goto put;
+        }
+
+        const char* ext = get_extension(resource);
+        if (is_script(ext)) {
+            response.is_script = 1;
+            response.content_type = "text/html";
+        } else {
+            response.is_script = 0;
+            // TODO(wgtdkp): support more MIME types
+            // content_type could be null
+            response.content_type = get_type(ext);
+        }
+
+        switch(resource->stat) {
+        case RS_OK:
+            response.status = 200;
+            if (!response.is_script) {
+                response.content_fd = open(resource->path, O_RDONLY, 00777);
+                assert(response.content_fd != -1);
+            }
+            break;
+        case RS_DENIED:
+            response.status = 403;
+            response.content_fd = open(default_403, O_RDONLY, 00777);
+            break;
+        case RS_NOTFOUND:
+        default:
+            response.status = 404;
+            response.content_fd = open(default_404, O_RDONLY, 00777);
+            break;
+        }
+    put:
+        // send response
+        put_response(client, request, resource, &response);
+
+        // release resource
+        if (response.content_fd != -1) {
+            int err = close(response.content_fd);
+            assert(err == 0);
+        }
+        
+    close:;
+        destroy_resource(&resource);
+        destroy_request(&request);
+        if (!keep_alive){
+            close(client);
+            return 0;
+        }
+    }
+*/
 }
 
 

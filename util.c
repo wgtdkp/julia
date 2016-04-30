@@ -26,3 +26,4 @@ void ju_log(const char* format, ...)
     va_end(args);
     fclose(log_file);
 }
+

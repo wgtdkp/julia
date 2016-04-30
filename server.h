@@ -11,11 +11,6 @@
 #define EVENTS_IN   (EPOLLIN | EPOLLET)
 #define EVENTS_OUT  (EPOLLOUT | EPOLLET)
 
-
-#define MIN(x, y)   ((x) < (y) ? (x): (y))
-#define MAX(x, y)   ((x) > (y) ? (x): (y))
-#define EXIT_ON(cond, msg)  if ((cond)) { perror((msg)); exit(EXIT_FAILURE); };
-
 enum {
     JU_ERR_UNEXPECTED_EOF,
     

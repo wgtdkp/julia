@@ -1,15 +1,79 @@
 #ifndef _JULIA_CONNECTION_H_
 #define _JULIA_CONNECTION_H_
 
-#include "request.h"
-#include "response.h"
+#include "buffer.h"
+#include "server.h"
+
 #include <sys/epoll.h>
 #include <stdbool.h>
 
 extern int epoll_fd;
 extern struct epoll_event events[MAX_EVENT_NUM];
 
+/********************
+ * Request
+ ********************/
+
+typedef enum {
+    M_CONNECT = 0,
+    M_DELETE,
+    M_GET,
+    M_HEAD,
+    M_OPTIONS,
+    M_POST,
+    M_PUT,
+    M_TRACE,
+} method_t;
+
 typedef struct {
+    method_t method;
+    struct {
+        int major;
+        int minor;
+    } version;
+
+    int status;
+
+    // For state machine
+    char* request_line_begin;
+    char* request_line_end;
+    char* method_begin;
+    char* uri_begin;
+    char* uri_end;
+    char* schema_begin;
+    char* schema_end;
+    char* host_begin;
+    char* host_end;
+
+    int state;
+    bool keep_alive;
+    bool request_line_done;
+    bool saw_eof;
+    buffer_t buffer;
+} request_t;
+
+
+/*********************
+ * Response
+ *********************/
+
+typedef struct {
+    int status;
+    const char* content_type;
+    int content_fd;
+    int is_script;
+
+    int send_cur;
+    char send_buf[SEND_BUF_SIZE];
+    bool ready; // response has been fully constructed
+} response_t;
+
+
+/*******************
+ * Connection
+ *******************/
+
+ typedef struct {
     int fd; // socket fd
     request_t request;
     response_t response;
@@ -18,14 +82,11 @@ typedef struct {
     // TODO(wgtdkp): expire time
 } connection_t;
 
-typedef enum {
-    RS_OK,
-    RS_NOTFOUND,
-    RS_DENIED, //resource access denied
-} ResourceStat;
 
 connection_t* new_connection(int fd);
 void delete_connection(connection_t* connection);
+void connection_close(connection_t* connection);
+
 void epoll_init(void);
 void event_add_listen(int* listen_fd);
 void event_add(connection_t* connection, int event_flags);

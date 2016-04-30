@@ -1,19 +1,22 @@
 #include "connection.h"
+#include "request.h"
+#include "response.h"
 
 #include <assert.h>
 #include <fcntl.h>
 #include <stdio.h>
+#include <unistd.h>
 
-typedef union connection_tNode connection_tNode;
-union connection_tNode{
+typedef union connection_node connection_node_t;
+union connection_node{
     connection_t connection;
-    connection_tNode* next;
+    connection_node_t* next;
 };
 
 // TODO(wgtdkp): make max concurrent connection configurable ?
 struct {
-    connection_tNode* cur;
-    connection_tNode connections[MAX_CONCURRENT_NUM];
+    connection_node_t* cur;
+    connection_node_t connections[MAX_CONCURRENT_NUM];
     int allocated;
 } connection_pool = {
     .cur = NULL,
@@ -29,7 +32,7 @@ static void set_nonblocking(int fd);
 // Return NULL if connections reaches MAX_CONCURRENT_NUM
 connection_t* new_connection(int fd)
 {
-    connection_tNode* connections = connection_pool.connections;
+    connection_node_t* connections = connection_pool.connections;
     static bool connections_inited = false;
     if (!connections_inited) {
         connection_pool.cur = &connections[0];
@@ -61,20 +64,17 @@ connection_t* new_connection(int fd)
 // TODO(wgtdkp): lock needed for multithreading
 void delete_connection(connection_t* connection)
 {
-    // TODO(wgtdkp): release resource
-    request_clear(&connection->request);
-    response_clear(&connection->response);
-    connection->nrequests = 0;
-
-    // insert the deleted connection back to head
-    connection_tNode* tmp = connection_pool.cur;
-    connection_pool.cur = (connection_tNode*)connection;
+    // Insert the deleted connection back to head
+    connection_node_t* tmp = connection_pool.cur;
+    connection_pool.cur = (connection_node_t*)connection;
     connection_pool.cur->next = tmp;
     --connection_pool.allocated;
-    // Closing fd will automatically delete events bind to it
-    //close(connection->fd);
-    //event_delete(connection, EVENTS_IN);
-    //event_delete(connection, EVETNS_OUT);
+}
+
+void connection_close(connection_t* connection)
+{
+    close(connection->fd);  // The events automatically removed
+    delete_connection(connection);
 }
 
 void epoll_init(void)

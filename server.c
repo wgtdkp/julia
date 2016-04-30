@@ -27,6 +27,7 @@
 
 #define DEBUG(msg)  fprintf(stderr, "%s\n", (msg));
 
+
 /*
 static char default_index[] = "index.php";
 static char default_404[256];
@@ -34,10 +35,6 @@ static char default_403[256];
 static char default_unimpl[256];
 static char www_dir[256];
 */
-
-//typedef unsigned char bool;
-//static const int true = 1;
-//static const int false = 0;
 
 static const response_t default_response = {
     .status = 200,
@@ -47,24 +44,9 @@ static const response_t default_response = {
 };
 
 static int startup(unsigned short port);
-/*
-static void setup_env(request_t* request);
-static int transfer_chunk(int des, int src);
-static int cat(int des, int src);
-static int catn(int des, int src, int n);
-static int cats(int des, const char* src, int n);
-*/
-int handle_request(connection_t* connection);
+
 int put_response(connection_t* connection);;
 
-/*
-static inline int is_script(const char* ext)
-{
-    if (strncasecmp("php", ext, 3) == 0)
-        return 1;
-    return 0;
-}
-*/
 
 static void send_test_response(connection_t* connection)
 {
@@ -91,128 +73,6 @@ static void send_test_response(connection_t* connection)
     on = 0;
     setsockopt(fd, IPPROTO_TCP, TCP_CORK, &on, sizeof(on));
 }
-
-int handle_request(connection_t* connection)
-{
-    request_t* request = &connection->request;
-    buffer_t* buffer = &request->buffer;
-    bool need_read_again = false;
-    do {
-        int last_buffer_size = buffer->size;
-        int readed = buffer_read(connection->fd, buffer);
-        if (readed == 0) {
-            // TODO(wgtdkp): client closed the connection
-        }
-        bool need_parse = false;
-        // The size of the buffer has reached the capacity.
-        // We have to perform parsing, even if the request is not completely received.
-        // This is the extreme situation that the request is longer than our receive buffer(4K).
-        // In this situation we need to read data again, and check if parsing needed.
-        // TODO(wgtdkp): a loop of "read, parse" is needed to handle this situation.
-        if (buffer->size >= buffer->capacity) {
-            need_read_again = true;
-            need_parse = true;
-        } else {
-            need_parse = buffer_has_eoh(buffer, last_buffer_size);
-        }
-        if (need_parse) {
-            int err = request_parse(request);
-            if (err != 0) {
-                // TODO(wgtdkp): handle parsing errors,
-                // may send back a "bad request" response.
-                // Refer to RFC 2616 for details.
-            }
-        }
-    } while (need_read_again);
-
-    // TODO(wgtdkp): check if request is all ready(completely parsed)
-
-    // TODO(wgtdkp): perform request
-
-    // TODO(wgtdkp): build and send response
-
-
-    //int fd = connection->fd;
-    //char buffer[1024];
-    //read(fd, buffer, 1024);
-    //send_test_response(connection);
-
-    //event_set_to(connection, EVENTS_OUT);
-/*
-    //int client = *((int*)args);
-    while (true) {
-        bool keep_alive = false;
-        //buffer_t* request_buf = create_buffer(100);
-        request_t* request = create_request();
-        Resource* resource = create_resource();
-        if (0 != parse_request_line(client, request, resource))
-            goto close;
-        if (0 != parse_request_header(client, request))
-            goto close;
-
-        keep_alive = request->keep_alive;
-        //ju_log("%s %s \n", method_repr(request->method), resource->path);
-
-        response_t response = default_response;
-
-        if (request->method != M_GET && request->method != M_POST) {
-            response.status = 501;
-            response.content_type = "text/html";
-            response.content_fd = open(default_unimpl, O_RDONLY, 00777);
-            goto put;
-        }
-
-        const char* ext = get_extension(resource);
-        if (is_script(ext)) {
-            response.is_script = 1;
-            response.content_type = "text/html";
-        } else {
-            response.is_script = 0;
-            // TODO(wgtdkp): support more MIME types
-            // content_type could be null
-            response.content_type = get_type(ext);
-        }
-
-        switch(resource->stat) {
-        case RS_OK:
-            response.status = 200;
-            if (!response.is_script) {
-                response.content_fd = open(resource->path, O_RDONLY, 00777);
-                assert(response.content_fd != -1);
-            }
-            break;
-        case RS_DENIED:
-            response.status = 403;
-            response.content_fd = open(default_403, O_RDONLY, 00777);
-            break;
-        case RS_NOTFOUND:
-        default:
-            response.status = 404;
-            response.content_fd = open(default_404, O_RDONLY, 00777);
-            break;
-        }
-    put:
-        // send response
-        put_response(client, request, resource, &response);
-
-        // release resource
-        if (response.content_fd != -1) {
-            int err = close(response.content_fd);
-            assert(err == 0);
-        }
-        
-    close:;
-        destroy_resource(&resource);
-        destroy_request(&request);
-        if (!keep_alive){
-            close(client);
-            return 0;
-        }
-    }
-*/
-    return 0;
-}
-
 
 // TODO(wgtdkp): use sendfile() for static resource
 int put_response(connection_t* connection)
@@ -446,17 +306,6 @@ static int startup(unsigned short port)
     return listen_fd;
 }
 
-// TODO(wgtdkp): chdir() will do this work
-/*
-static void config(const char* dir)
-{
-    realpath(dir, www_dir);
-    snprintf(default_404, 256 - 1, "%s/404.html", www_dir);
-    snprintf(default_403, 256 - 1, "%s/403.html", www_dir);
-    snprintf(default_unimpl, 256 - 1, "%s/unimpl.html", www_dir);
-}
-*/
-
 static void usage(void)
 {
     fprintf(stderr, "Usage:\n"
@@ -515,7 +364,7 @@ int main(int argc, char* argv[])
                     int connection_fd = accept(fd, NULL, NULL);
                     //        (struct sockaddr*)&client, &client_len);
                     if (connection_fd == -1) {
-                        EXIT_ON((errno != EAGAIN) && (errno != EWOULDBLOCK),
+                        EXIT_ON((errno != EWOULDBLOCK),
                                 "accept");
                         break;
                     }

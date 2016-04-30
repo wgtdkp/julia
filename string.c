@@ -9,92 +9,25 @@
 /*
  * string initiator with specific capacity c
  */
-void string_init(string_t* str, int c)
-{
-    str->size = 0;
-    if (c <= 0) {
-        str->capacity = 0;
-        str->data = NULL;
-        return;
-    }
-    str->data = (char*)malloc(c * sizeof(char));
-    // TODO(wgtdkp): handle malloc error
-    assert(str->data != NULL);
-    str->capacity = c;
-}
 
-void string_release(string_t* str)
-{
-    str->size = 0;
-    free(str->data);
-    str->data = NULL;
-}
 
-void string_clear(string_t* str)
+int print_string(const char* format, ...)
 {
-    string_resize(str, 0);
-}
-
-void string_push_back(string_t* str, char ch)
-{
-    if (str->size >= str->capacity - 1)
-        string_reserve(str, str->capacity * 2);
-    
-    str->data[str->size++] = ch;
-    str->data[str->size] = 0;
-}
-
-void string_resize(string_t* str, unsigned new_size)
-{
-    if (new_size + 1 > str->capacity)
-        string_reserve(str, new_size + 1);
-    if (new_size > str->size) {
-        memset(str->data + str->size, 0, new_size - str->size);
-        str->data[new_size] = 0;
-        str->size = new_size;
-    } else {
-        str->data[new_size] = 0;
-        str->size = new_size;
-    }
-}
-
-void string_copy(string_t* des, const char* p, int len)
-{
-    string_reserve(des, len + 1);
-    memcpy(des->data, p, len);
-    des->data[len] = 0;
-    des->size = len;
-}
-
-void string_reserve(string_t* str, int c)
-{
-    if (c <= str->capacity)
-        return;
-    char* new_data = (char*)malloc(c * sizeof(char));
-    assert(new_data != NULL);
-    if (str->size != 0) {
-        memcpy(new_data, str->data, str->size);
-        free(str->data);
-    }
-    new_data[str->size] = 0;
-    str->capacity = c;
-    str->data = new_data;
-}
-
-int string_append(string_t* str, const char* p, int len)
-{
-    string_reserve(str, str->size + len + 1);
-    memcpy(str->data + str->size, p, len);
-    str->data[str->size + len] = 0;
-    str->size += len;
-    return 0;
-}
-
-int string_print(string_t* str, const char* format, ...)
-{
+    int ret = 0;
     va_list args;
     va_start(args, format);
-    int ret = vsnprintf(str->data, str->size, format, args);
+    const char* p;
+    for (p = format; p[0] != 0; p++) {
+        if (p[0] == '%' && p[1] == '*' && (p[2] == 's' || p[2] == 'S')) {
+            char* str = va_arg(args, char*);
+            int len = va_arg(args, int);
+            for (int i = 0; i < len; i++)
+                ret += printf("%c", str[i]);
+            p += 2;
+        } else {
+            ret += printf("%c", p[0]);
+        }
+    }
     va_end(args);
     return ret;
 }
