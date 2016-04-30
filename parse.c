@@ -5,6 +5,7 @@
 #include "parse.h"
 #include "buffer.h"
 #include "request.h"
+#include "string.h"
 #include "util.h"
 
 #include <assert.h>
@@ -54,6 +55,8 @@ static const char token_tb[128] = {
 };
 */
 
+static int parse_uri(request_t* request, char ch);
+
 int request_parse(request_t* request)
 {
     // 0. parse request line
@@ -66,31 +69,49 @@ int request_parse(request_t* request)
 
 // State machine: request line states
 enum {
-    RLS_BEGIN = 0,
-    RLS_METHOD,
-    RLS_SP_BEFORE_URI,
-    RLS_URI_SLASH,
-    RLS_URI_ASTERIK,
-    RLS_SCHEMA,
-    RLS_SCHEMA_COLON,
-    RLS_SCHEMA_SLASH,
-    RLS_SCHEMA_SLASH_SLASH,
-    RLS_HOST_IP_LITERAL,
-    RLS_HOST,
-    RLS_HOST_END,
-    RLS_PORT,
-    RLS_SP_BEFROE_VERSION,
-    RLS_HTTP_H,
-    RLS_HTTP_HT,
-    RLS_HTTP_HTT,
-    RLS_HTTP_HTTP,
-    RLS_HTTP_VERSION_SLASH,
-    RLS_HTTP_VERSION_MAJOR,
-    RLS_HTTP_VERSION_DOT,
-    RLS_HTTP_VERSION_MINOR,
-    RLS_SP_AFTER_VERSION,
-    RLS_ALMOST_DONE,
-    RLS_DONE,
+    // Request line state
+    RL_S_BEGIN = 0,
+    RL_S_METHOD,
+    RL_S_SP_BEFORE_URI,
+    RL_S_URI_SLASH,
+    RL_S_URI_ASTERIK,
+    RL_S_SCHEMA,
+    RL_S_SCHEMA_COLON,
+    RL_S_SCHEMA_SLASH,
+    RL_S_SCHEMA_SLASH_SLASH,
+    RL_S_HOST_IP_LITERAL,
+    RL_S_HOST,
+    RL_S_HOST_END,
+    RL_S_PORT,
+    RL_S_SP_BEFROE_VERSION,
+    RL_S_HTTP_H,
+    RL_S_HTTP_HT,
+    RL_S_HTTP_HTT,
+    RL_S_HTTP_HTTP,
+    RL_S_HTTP_VERSION_SLASH,
+    RL_S_HTTP_VERSION_MAJOR,
+    RL_S_HTTP_VERSION_DOT,
+    RL_S_HTTP_VERSION_MINOR,
+    RL_S_SP_AFTER_VERSION,
+    RL_S_ALMOST_DONE,
+    RL_S_DONE,
+
+    // Header line state
+    HL_S_BEGIN,
+    HL_S_IGNORE,
+    HL_S_NAME,
+    HL_S_COLON,
+    HL_S_SP_BEFORE_VALUE,
+    HL_S_VALUE,
+    HL_S_SP_AFTER_VALUE,
+    HL_S_ALMOST_DONE,
+    HL_S_DONE,
+};
+
+enum {
+    URI_S_SLASH = 0,
+    URI_S_ENTRY,
+
 };
 
 int parse_request_line(request_t* request)
@@ -101,14 +122,14 @@ int parse_request_line(request_t* request)
         char ch = *p;
         
         switch (request->state) {
-        case RLS_BEGIN:
+        case RL_S_BEGIN:
             request->request_line_begin = p;
             request->method_begin = p;
             ERR_ON(!IS_UPALPHA(ch), ERR_INVALID_REQUEST);
-            request->state = RLS_METHOD;
+            request->state = RL_S_METHOD;
             break;
 
-        case RLS_METHOD:
+        case RL_S_METHOD:
             if (IS_UPALPHA(ch))
                 break;
             ERR_ON(ch != ' ', ERR_INVALID_METHOD);
@@ -156,10 +177,10 @@ int parse_request_line(request_t* request)
             default:
                 return ERR_INVALID_METHOD;
             }
-            request->state = RLS_SP_BEFORE_URI;
+            request->state = RL_S_SP_BEFORE_URI;
             break;
 
-        case RLS_SP_BEFORE_URI:
+        case RL_S_SP_BEFORE_URI:
             // RFC 2616:
             // Request-URI    = "*" | absoluteURI | abs_path | authority
             // absoluteURI: FIRST set: {alpha}
@@ -167,23 +188,23 @@ int parse_request_line(request_t* request)
             // authority ?
             if (ch == '/') {
                 request->uri_begin = p;
-                request->state = RLS_URI_SLASH;
+                request->state = RL_S_URI_SLASH;
                 break;
             } else if (ch == '*') {
                 request->uri_begin = p;
-                request->state = RLS_URI_ASTERIK;
+                request->state = RL_S_URI_ASTERIK;
                 break;
             }
 
             if (IS_ALPHA(ch)) {
                 request->schema_begin = p;
-                request->state = RLS_SCHEMA;
+                request->state = RL_S_SCHEMA;
                 break;
             }
             ERR_ON(ch != ' ', ERR_INVALID_REQUEST);
             break;
 
-        case RLS_SCHEMA:
+        case RL_S_SCHEMA:
             switch (ch) {
             case 'A' ... 'Z':
             case 'a' ... 'z':
@@ -194,42 +215,42 @@ int parse_request_line(request_t* request)
                 break;
             case ':':
                 request->schema_end = p;
-                request->state = RLS_SCHEMA_COLON;
+                request->state = RL_S_SCHEMA_COLON;
                 break;
             default:
                 return ERR_INVALID_REQUEST;
             }
             break;
 
-        case RLS_SCHEMA_COLON:
+        case RL_S_SCHEMA_COLON:
             switch (ch) {
             case '/':
-                request->state = RLS_SCHEMA_SLASH;
+                request->state = RL_S_SCHEMA_SLASH;
                 break;
             default:
                 return ERR_INVALID_REQUEST;
             }
             break;
 
-        case RLS_SCHEMA_SLASH:
+        case RL_S_SCHEMA_SLASH:
             switch (ch) {
             case '/':
-                request->state = RLS_SCHEMA_SLASH_SLASH;
+                request->state = RL_S_SCHEMA_SLASH_SLASH;
                 break;
             default:
                 return ERR_INVALID_REQUEST;
             }
             break;
 
-        case RLS_SCHEMA_SLASH_SLASH:
+        case RL_S_SCHEMA_SLASH_SLASH:
             request->host_begin = p;
             if (ch == '[') {
-                request->state = RLS_HOST_IP_LITERAL;
+                request->state = RL_S_HOST_IP_LITERAL;
                 break;
             }
-            request->state = RLS_HOST;
+            request->state = RL_S_HOST;
             // Fall through
-        case RLS_HOST:
+        case RL_S_HOST:
             switch (ch) {
             case 'A' ... 'Z':
             case 'a' ... 'z':
@@ -239,15 +260,15 @@ int parse_request_line(request_t* request)
                 goto end_state_switch;
             }
             // Fall through
-        case RLS_HOST_END:
+        case RL_S_HOST_END:
             request->host_end = p;
             switch (ch) {
             case ':':
-                request->state = RLS_PORT;
+                request->state = RL_S_PORT;
                 break;
             case '/':
                 request->uri_begin = p;
-                request->state = RLS_URI_SLASH;
+                request->state = RL_S_URI_SLASH;
                 break;
             case ' ':
                 // Must ended by '/'
@@ -256,27 +277,27 @@ int parse_request_line(request_t* request)
             }
             break;
 
-        case RLS_HOST_IP_LITERAL:
+        case RL_S_HOST_IP_LITERAL:
             // "[" 1*(digit | ".") "]"
             switch (ch) {
             case '0' ... '9':
             case '.':
                 break;
             case ']':
-                request->state = RLS_HOST_END;
+                request->state = RL_S_HOST_END;
                 break;
             default:
                 return ERR_INVALID_REQUEST;
             }
             break;
 
-        case RLS_PORT:
+        case RL_S_PORT:
             switch (ch) {
             case '0' ... '9':
                 break;
             case '/':
                 request->uri_begin = p;
-                request->state = RLS_URI_SLASH;
+                request->state = RL_S_URI_SLASH;
                 break;
             case ' ':
             default:
@@ -284,65 +305,67 @@ int parse_request_line(request_t* request)
             }
             break;
 
-        case RLS_URI_SLASH:
+        case RL_S_URI_SLASH:
             switch (ch) {
             case ' ':
                 request->uri_end = p;
-                request->state = RLS_SP_BEFROE_VERSION;
+                request->state = RL_S_SP_BEFROE_VERSION;
                 break;
             case '\t':
             case '\r':
             case '\n':
                 return ERR_INVALID_REQUEST;
             default:
+                ERR_ON(parse_uri(request, ch) != OK,
+                        ERR_INVALID_REQUEST);
                 break;
             }
             break;
 
-        case RLS_SP_BEFROE_VERSION:
+        case RL_S_SP_BEFROE_VERSION:
             switch (ch) {
             case ' ':
                 break;
             case 'H':
-                request->state = RLS_HTTP_H;
+                request->state = RL_S_HTTP_H;
                 break;
             }
             break;
 
         // Is "HTTP/major.minor" case-sensitive?
-        case RLS_HTTP_H:
+        case RL_S_HTTP_H:
             ERR_ON(ch != 'T', ERR_INVALID_REQUEST);
-            request->state = RLS_HTTP_HT;
+            request->state = RL_S_HTTP_HT;
             break;
 
-        case RLS_HTTP_HT:
+        case RL_S_HTTP_HT:
             ERR_ON(ch != 'T', ERR_INVALID_REQUEST);
-            request->state = RLS_HTTP_HTT;
+            request->state = RL_S_HTTP_HTT;
             break;
 
-        case RLS_HTTP_HTT:
+        case RL_S_HTTP_HTT:
             ERR_ON(ch != 'P', ERR_INVALID_REQUEST);
-            request->state = RLS_HTTP_HTTP;
+            request->state = RL_S_HTTP_HTTP;
             break;
 
-        case RLS_HTTP_HTTP:
+        case RL_S_HTTP_HTTP:
             ERR_ON(ch != '/', ERR_INVALID_REQUEST);
-            request->state = RLS_HTTP_VERSION_SLASH;
+            request->state = RL_S_HTTP_VERSION_SLASH;
             break;
 
-        case RLS_HTTP_VERSION_SLASH:
+        case RL_S_HTTP_VERSION_SLASH:
             switch (ch) {
             case '0' ... '9':
                 request->version.major =
                         request->version.major * 10 + ch - '0';
-                request->state = RLS_HTTP_VERSION_MAJOR;
+                request->state = RL_S_HTTP_VERSION_MAJOR;
                 break;
             default:
                 return ERR_INVALID_REQUEST;
             }
             break;
 
-        case RLS_HTTP_VERSION_MAJOR:
+        case RL_S_HTTP_VERSION_MAJOR:
             switch (ch) {
             case '0' ... '9':
                 request->version.major =
@@ -350,26 +373,26 @@ int parse_request_line(request_t* request)
                 ERR_ON(request->version.major > 999, ERR_INVALID_VERSION);
                 break;
             case '.':
-                request->state = RLS_HTTP_VERSION_DOT;
+                request->state = RL_S_HTTP_VERSION_DOT;
                 break;
             default:
                 return ERR_INVALID_REQUEST;
             }
             break;
 
-        case RLS_HTTP_VERSION_DOT:
+        case RL_S_HTTP_VERSION_DOT:
             switch (ch) {
             case '0' ... '9':
                 request->version.minor =
                         request->version.minor * 10 + ch - '0';
-                request->state = RLS_HTTP_VERSION_MINOR;
+                request->state = RL_S_HTTP_VERSION_MINOR;
                 break;
             default:
                 return ERR_INVALID_REQUEST;
             }
             break;
 
-        case RLS_HTTP_VERSION_MINOR:
+        case RL_S_HTTP_VERSION_MINOR:
             switch (ch) {
             case '0' ... '9':
                 request->version.minor =
@@ -377,10 +400,10 @@ int parse_request_line(request_t* request)
                 ERR_ON(request->version.minor > 999, ERR_INVALID_VERSION);
                 break;
             case ' ':
-                request->state = RLS_SP_AFTER_VERSION;
+                request->state = RL_S_SP_AFTER_VERSION;
                 break;
             case '\r':
-                request->state = RLS_ALMOST_DONE;
+                request->state = RL_S_ALMOST_DONE;
                 break;
             case '\n':
                 goto done;
@@ -389,12 +412,12 @@ int parse_request_line(request_t* request)
             }
             break;
 
-        case RLS_SP_AFTER_VERSION:
+        case RL_S_SP_AFTER_VERSION:
             switch (ch) {
             case ' ':
                 break;
             case '\r':
-                request->state = RLS_ALMOST_DONE;
+                request->state = RL_S_ALMOST_DONE;
                 break;
             case '\n':
             default:
@@ -402,7 +425,7 @@ int parse_request_line(request_t* request)
             }
             break;
 
-        case RLS_ALMOST_DONE:
+        case RL_S_ALMOST_DONE:
             ERR_ON(ch != '\n', ERR_INVALID_REQUEST);
             goto done;
 
@@ -420,9 +443,203 @@ done:
     request->request_line_done = true;
     buffer->begin = p + 1;
     request->request_line_end = p;
-    request->state = RLS_BEGIN;
+    request->state = HL_S_BEGIN;
     return OK;
 }
+
+
+int parse_header_line(request_t* request)
+{
+    buffer_t* buffer = &request->buffer;
+    char* p;
+    for (p = buffer->begin; p < buffer->end; p++) {
+        char ch = *p;
+        switch (request->state) {
+        case HL_S_BEGIN:
+            switch(ch) {
+            case '0' ... '9':
+            case 'A' ... 'Z':
+            case 'a' ... 'z':
+            case '-':
+                request->header_name_begin = p;
+                request->state = HL_S_NAME;
+                break;
+            case '\r':
+                request->headers_done = true;
+                request->state = HL_S_ALMOST_DONE;
+                break;
+            case '\n':
+            default:
+                request->invalid_header = true;
+                request->state = HL_S_IGNORE;
+                break;
+            }
+            break;
+
+        case HL_S_IGNORE:
+            switch (ch) {
+            case '\n':
+                request->state = HL_S_BEGIN;
+                break;
+            default:
+                break;
+            }
+            break;
+
+        case HL_S_NAME:
+            switch(ch) {
+            case '0' ... '9':
+            case 'A' ... 'Z':
+            case 'a' ... 'z':
+            case '-':
+                break;
+            case ':':
+                request->header_name_end = p;
+                request->state = HL_S_COLON;
+                break;
+            case '\r':
+                request->state = HL_S_ALMOST_DONE;
+                break;
+            case '\n':
+            default:
+                request->invalid_header = true;
+                request->state = HL_S_IGNORE;
+                break;
+            }
+            break;
+
+        case HL_S_SP_BEFORE_VALUE: 
+        case HL_S_COLON:
+            switch (ch) {
+            case ' ':
+                request->state = HL_S_SP_BEFORE_VALUE;
+                break;
+            case '\r':
+                request->state = HL_S_ALMOST_DONE;
+                break;
+            case '\n':
+                goto header_done;
+            default:
+                request->header_value_begin = p;
+                request->state = HL_S_VALUE;
+                break;
+            }
+            break;
+
+        case HL_S_VALUE:
+            switch (ch) {
+            case ' ':
+                request->header_value_end = p;
+                request->state = HL_S_SP_AFTER_VALUE;
+                break;
+            case '\r':
+                request->header_value_end = p;
+                request->state = HL_S_ALMOST_DONE;
+                break;
+            case '\n':
+                request->header_value_end = p;
+                goto header_done;
+            default:
+                break;
+            }
+            break;
+
+        case HL_S_SP_AFTER_VALUE:
+            switch (ch) {
+            case '\r':
+                request->state = HL_S_ALMOST_DONE;
+                break;
+            case '\n':
+                goto header_done;
+            default:
+                break;
+            }
+            break;
+
+        case HL_S_ALMOST_DONE:
+            switch (ch) {
+            case '\n':
+                goto header_done;
+            default:
+                request->headers_done = false;
+                request->invalid_header = true;
+                request->state = HL_S_IGNORE;
+                break;
+            }
+            break;
+
+        default:
+            assert(0);
+        }
+    }
+    return OK;
+
+header_done:
+    print_string("name: %*s\n", request->header_name_begin,
+            request->header_name_end - request->header_name_begin);
+    print_string("value: %*s\n", request->header_value_begin,
+            request->header_value_end - request->header_value_begin);
+
+    buffer->begin = p + 1;
+    return OK;
+}
+
+static int parse_uri(request_t* request, char ch)
+{
+    switch (request->uri_state) {
+    case URI_S_SLASH:
+        switch (ch) {
+        case '/':
+            break;
+
+        }
+    }
+    return OK;
+}
+
+/*
+general-header = Cache-Control            ; Section 14.9
+              | Connection               ; Section 14.10
+              | Date                     ; Section 14.18
+              | Pragma                   ; Section 14.32
+              | Trailer                  ; Section 14.40
+              | Transfer-Encoding        ; Section 14.41
+              | Upgrade                  ; Section 14.42
+              | Via                      ; Section 14.45
+              | Warning                  ; Section 14.46
+
+request-header = Accept                   ; Section 14.1
+              | Accept-Charset           ; Section 14.2
+              | Accept-Encoding          ; Section 14.3
+              | Accept-Language          ; Section 14.4
+              | Authorization            ; Section 14.8
+              | Expect                   ; Section 14.20
+              | From                     ; Section 14.22
+              | Host                     ; Section 14.23
+              | If-Match                 ; Section 14.24
+              | If-Modified-Since        ; Section 14.25
+              | If-None-Match            ; Section 14.26
+              | If-Range                 ; Section 14.27
+              | If-Unmodified-Since      ; Section 14.28
+              | Max-Forwards             ; Section 14.31
+              | Proxy-Authorization      ; Section 14.34
+              | Range                    ; Section 14.35
+              | Referer                  ; Section 14.36
+              | TE                       ; Section 14.39
+              | User-Agent               ; Section 14.43
+
+response-header = Accept-Ranges           ; Section 14.5
+               | Age                     ; Section 14.6
+               | ETag                    ; Section 14.19
+               | Location                ; Section 14.30
+               | Proxy-Authenticate      ; Section 14.33
+               | Retry-After             ; Section 14.37
+               | Server                  ; Section 14.38
+               | Vary                    ; Section 14.44
+               | WWW-Authenticate        ; Section 14.47
+
+*/
+
 
 /* URI Generic syntax
     URI-reference = [ absoluteURI | relativeURI ] [ "#" fragment ]

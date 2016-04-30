@@ -2,6 +2,7 @@
 #define _JULIA_UTIL_H_
 
 #define OK  (0)
+#define AGAIN   (1)
 #define ERR_INVALID_REQUEST (-1)
 #define ERR_INVALID_METHOD  (-2)
 #define ERR_INVALID_VERSION (-3)

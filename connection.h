@@ -44,9 +44,16 @@ typedef struct {
     char* schema_end;
     char* host_begin;
     char* host_end;
+    char* header_name_begin;
+    char* header_name_end;
+    char* header_value_begin;
+    char* header_value_end;
 
     int state;
+    int uri_state;
     bool keep_alive;
+    bool invalid_header;
+    bool headers_done;
     bool request_line_done;
     bool saw_eof;
     buffer_t buffer;

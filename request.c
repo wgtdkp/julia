@@ -67,8 +67,15 @@ void request_init(request_t* request)
     request->schema_end = NULL;
     request->host_begin = NULL;
     request->host_end = NULL;
+    request->header_name_begin = NULL;
+    request->header_name_end = NULL;
+    request->header_value_begin = NULL;
+    request->header_value_end = NULL;
+    request->invalid_header= false;
+    request->headers_done = false;
 
     request->state = 0;
+    request->uri_state = 0;
     request->request_line_done = false;
     request->keep_alive = false;
     request->saw_eof = false;
