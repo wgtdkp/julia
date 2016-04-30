@@ -609,9 +609,14 @@ static int parse_header_line(request_t* request)
 
 header_done:
     // DEBUG:
-    print_string("name: %*s\n", request->header_name);
-    print_string("value: %*s\n", request->header_value);
-   
+    if (NULL != request->header_name.begin)
+        print_string("name: %*s\n", request->header_name);
+    if (NULL != request->header_name.end)
+        print_string("value: %*s\n", request->header_value);
+
+    // Reset states
+    string_init(&request->header_name);
+    string_init(&request->header_value);
     buffer->begin = p + 1;
     request->state = HL_S_BEGIN;
     return OK;

@@ -27,14 +27,10 @@ static int dump_request(request_t* request)
     printf("status: %d\n", request->status);
     printf("method: %d\n", request->method);
     printf("version: %d.%d\n", request->version.major, request->version.minor);
-    print_string("request_line: %*s\n", request->request_line.begin,
-            request->request_line.end - request->request_line.begin);
-    print_string("uri: %*s\n", request->uri.begin,
-            request->uri.end - request->uri.begin);
-    print_string("schema: %*s\n", request->schema.begin,
-            request->schema.end - request->schema.begin);
-    print_string("host: %*s\n", request->host.begin,
-            request->host.end - request->host.begin);
+    print_string("request_line: %*s\n", request->request_line);
+    print_string("uri: %*s\n", request->uri);
+    print_string("schema: %*s\n", request->schema);
+    print_string("host: %*s\n", request->host);
     printf("state: %d\n", request->state);
     printf("reuqest_line_done: %d\n", request->request_line_done);
     printf("keep_alive: %d\n", request->keep_alive);
@@ -105,7 +101,7 @@ int handle_request(connection_t* connection)
     }
 
     if (buffer_size(buffer) > 0)
-        print_string("%*s\n", buffer->begin, buffer_size(buffer));
+        print_string("%*s", (string_t){buffer->begin, buffer->end});
     
     int err = request_parse(request);
     if (err != OK) {
