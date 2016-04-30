@@ -1,8 +1,8 @@
-TARGET = julia
+TARGET = client
 
 CC = gcc
-SRCS = buffer.c connection.c parse.c request.c response.c server.c string.c util.c
-CFLAGS = -g -std=c11 -Wall -D_XOPEN_SOURCE -D_GNU_SOURCE 
+SRCS = client.c
+CFLAGS = -std=c11 -Wall -D_XOPEN_SOURCE -D_GNU_SOURCE 
 
 OBJS_DIR = build/
 OBJS = $(SRCS:.c=.o)

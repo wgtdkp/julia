@@ -72,11 +72,12 @@ void request_init(request_t* request)
     request->header_value_begin = NULL;
     request->header_value_end = NULL;
     request->invalid_header= false;
-    request->headers_done = false;
 
     request->state = 0;
     request->uri_state = 0;
     request->request_line_done = false;
+    request->headers_done = false;
+    request->body_done = false;
     request->keep_alive = false;
     request->saw_eof = false;
 
@@ -110,7 +111,7 @@ int handle_request(connection_t* connection)
     }
 
     if (buffer_size(buffer) > 0)
-        print_string("recv data: %*s\n", buffer->begin, buffer_size(buffer));
+        print_string("%*s\n", buffer->begin, buffer_size(buffer));
     
     int err = request_parse(request);
     if (err != OK) {
@@ -119,7 +120,7 @@ int handle_request(connection_t* connection)
         printf("err: %d\n", err);
         fflush(stdout);
         connection_close(connection);
-        dump_request(request);
+        //dump_request(request);
         //assert(0);
     }
 
@@ -131,7 +132,7 @@ int handle_request(connection_t* connection)
     }
 
     if (request->request_line_done) {
-        printf("parse request line done\n");
+        //printf("parse request line done\n");
         fflush(stdout);
     }
 
@@ -140,7 +141,7 @@ int handle_request(connection_t* connection)
         printf("connection closed\n");
         fflush(stdout);
         connection_close(connection);
-        dump_request(request);
+        //dump_request(request);
     }
 
     return 0;

@@ -56,12 +56,39 @@ static const char token_tb[128] = {
 */
 
 static int parse_uri(request_t* request, char ch);
+static int parse_request_line(request_t* request);
+static int parse_header_line(request_t* request);
+static int parse_request_body(request_t* request);
+
 
 int request_parse(request_t* request)
 {
     // 0. parse request line
-    int err = parse_request_line(request);
-    // 1. parse header entities
+
+    int err = 0;
+    if (!request->request_line_done) {
+        err = parse_request_line(request);
+        if (err != OK)
+            return err;
+    }
+
+    if (request->request_line_done && !request->headers_done) {
+        while (buffer_size(&request->buffer) > 0) {
+            err = parse_header_line(request);
+            if (request->headers_done)
+                break;
+            if (err != OK)
+                return err;
+        }
+    }
+
+    if (request->headers_done && !request->body_done) {
+        err = parse_request_body(request);
+        if (err != OK)
+            return err;
+    }
+    
+    // 1. parse header lines
 
     // 2. parse header body
     return err;
@@ -114,7 +141,7 @@ enum {
 
 };
 
-int parse_request_line(request_t* request)
+static int parse_request_line(request_t* request)
 {
     buffer_t* buffer = &request->buffer;
     char* p;
@@ -440,15 +467,15 @@ int parse_request_line(request_t* request)
     return OK;
 
 done:
-    request->request_line_done = true;
     buffer->begin = p + 1;
+    request->request_line_done = true;
     request->request_line_end = p;
     request->state = HL_S_BEGIN;
     return OK;
 }
 
 
-int parse_header_line(request_t* request)
+static int parse_header_line(request_t* request)
 {
     buffer_t* buffer = &request->buffer;
     char* p;
@@ -546,12 +573,16 @@ int parse_header_line(request_t* request)
 
         case HL_S_SP_AFTER_VALUE:
             switch (ch) {
+            case ' ':
+                break;
             case '\r':
                 request->state = HL_S_ALMOST_DONE;
                 break;
             case '\n':
+                // Single '\n' is also accepted
                 goto header_done;
             default:
+                request->state = HL_S_VALUE;
                 break;
             }
             break;
@@ -572,15 +603,19 @@ int parse_header_line(request_t* request)
             assert(0);
         }
     }
+    
+    buffer->begin = buffer->end;
     return OK;
 
 header_done:
+    // DEBUG:
     print_string("name: %*s\n", request->header_name_begin,
             request->header_name_end - request->header_name_begin);
     print_string("value: %*s\n", request->header_value_begin,
             request->header_value_end - request->header_value_begin);
-
+   
     buffer->begin = p + 1;
+    request->state = HL_S_BEGIN;
     return OK;
 }
 
@@ -594,6 +629,12 @@ static int parse_uri(request_t* request, char ch)
 
         }
     }
+    return OK;
+}
+
+static int parse_request_body(request_t* request)
+{
+    
     return OK;
 }
 

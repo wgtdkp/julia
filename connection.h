@@ -53,8 +53,9 @@ typedef struct {
     int uri_state;
     bool keep_alive;
     bool invalid_header;
-    bool headers_done;
     bool request_line_done;
+    bool headers_done;
+    bool body_done;
     bool saw_eof;
     buffer_t buffer;
 } request_t;
