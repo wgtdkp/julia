@@ -3,6 +3,7 @@
 
 #include "buffer.h"
 #include "server.h"
+#include "string.h"
 
 #include <sys/epoll.h>
 #include <stdbool.h>
@@ -35,19 +36,13 @@ typedef struct {
     int status;
 
     // For state machine
-    char* request_line_begin;
-    char* request_line_end;
-    char* method_begin;
-    char* uri_begin;
-    char* uri_end;
-    char* schema_begin;
-    char* schema_end;
-    char* host_begin;
-    char* host_end;
-    char* header_name_begin;
-    char* header_name_end;
-    char* header_value_begin;
-    char* header_value_end;
+    string_t request_line;
+    string_t method_unparsed;
+    string_t uri;
+    string_t schema;
+    string_t host;
+    string_t header_name;
+    string_t header_value;
 
     int state;
     int uri_state;

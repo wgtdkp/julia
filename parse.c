@@ -150,8 +150,8 @@ static int parse_request_line(request_t* request)
         
         switch (request->state) {
         case RL_S_BEGIN:
-            request->request_line_begin = p;
-            request->method_begin = p;
+            request->request_line.begin = p;
+            request->method_unparsed.begin = p;
             ERR_ON(!IS_UPALPHA(ch), ERR_INVALID_REQUEST);
             request->state = RL_S_METHOD;
             break;
@@ -162,7 +162,7 @@ static int parse_request_line(request_t* request)
             ERR_ON(ch != ' ', ERR_INVALID_METHOD);
             
             // End of method
-            char* m = request->method_begin;
+            char* m = request->method_unparsed.begin;
             int len = p - m;
             switch (len) {
             case 3:
@@ -214,17 +214,17 @@ static int parse_request_line(request_t* request)
             // abs_path:    FIRST set: {'/'}
             // authority ?
             if (ch == '/') {
-                request->uri_begin = p;
+                request->uri.begin = p;
                 request->state = RL_S_URI_SLASH;
                 break;
             } else if (ch == '*') {
-                request->uri_begin = p;
+                request->uri.begin = p;
                 request->state = RL_S_URI_ASTERIK;
                 break;
             }
 
             if (IS_ALPHA(ch)) {
-                request->schema_begin = p;
+                request->schema.begin = p;
                 request->state = RL_S_SCHEMA;
                 break;
             }
@@ -241,7 +241,7 @@ static int parse_request_line(request_t* request)
             case '.':
                 break;
             case ':':
-                request->schema_end = p;
+                request->schema.end = p;
                 request->state = RL_S_SCHEMA_COLON;
                 break;
             default:
@@ -270,7 +270,7 @@ static int parse_request_line(request_t* request)
             break;
 
         case RL_S_SCHEMA_SLASH_SLASH:
-            request->host_begin = p;
+            request->host.begin = p;
             if (ch == '[') {
                 request->state = RL_S_HOST_IP_LITERAL;
                 break;
@@ -288,13 +288,13 @@ static int parse_request_line(request_t* request)
             }
             // Fall through
         case RL_S_HOST_END:
-            request->host_end = p;
+            request->host.end = p;
             switch (ch) {
             case ':':
                 request->state = RL_S_PORT;
                 break;
             case '/':
-                request->uri_begin = p;
+                request->uri.begin = p;
                 request->state = RL_S_URI_SLASH;
                 break;
             case ' ':
@@ -323,7 +323,7 @@ static int parse_request_line(request_t* request)
             case '0' ... '9':
                 break;
             case '/':
-                request->uri_begin = p;
+                request->uri.begin = p;
                 request->state = RL_S_URI_SLASH;
                 break;
             case ' ':
@@ -335,7 +335,7 @@ static int parse_request_line(request_t* request)
         case RL_S_URI_SLASH:
             switch (ch) {
             case ' ':
-                request->uri_end = p;
+                request->uri.end = p;
                 request->state = RL_S_SP_BEFROE_VERSION;
                 break;
             case '\t':
@@ -469,7 +469,7 @@ static int parse_request_line(request_t* request)
 done:
     buffer->begin = p + 1;
     request->request_line_done = true;
-    request->request_line_end = p;
+    request->request_line.end = p;
     request->state = HL_S_BEGIN;
     return OK;
 }
@@ -488,7 +488,7 @@ static int parse_header_line(request_t* request)
             case 'A' ... 'Z':
             case 'a' ... 'z':
             case '-':
-                request->header_name_begin = p;
+                request->header_name.begin = p;
                 request->state = HL_S_NAME;
                 break;
             case '\r':
@@ -521,7 +521,7 @@ static int parse_header_line(request_t* request)
             case '-':
                 break;
             case ':':
-                request->header_name_end = p;
+                request->header_name.end = p;
                 request->state = HL_S_COLON;
                 break;
             case '\r':
@@ -547,7 +547,7 @@ static int parse_header_line(request_t* request)
             case '\n':
                 goto header_done;
             default:
-                request->header_value_begin = p;
+                request->header_value.begin = p;
                 request->state = HL_S_VALUE;
                 break;
             }
@@ -556,15 +556,15 @@ static int parse_header_line(request_t* request)
         case HL_S_VALUE:
             switch (ch) {
             case ' ':
-                request->header_value_end = p;
+                request->header_value.end = p;
                 request->state = HL_S_SP_AFTER_VALUE;
                 break;
             case '\r':
-                request->header_value_end = p;
+                request->header_value.end = p;
                 request->state = HL_S_ALMOST_DONE;
                 break;
             case '\n':
-                request->header_value_end = p;
+                request->header_value.end = p;
                 goto header_done;
             default:
                 break;
@@ -609,10 +609,8 @@ static int parse_header_line(request_t* request)
 
 header_done:
     // DEBUG:
-    print_string("name: %*s\n", request->header_name_begin,
-            request->header_name_end - request->header_name_begin);
-    print_string("value: %*s\n", request->header_value_begin,
-            request->header_value_end - request->header_value_begin);
+    print_string("name: %*s\n", request->header_name);
+    print_string("value: %*s\n", request->header_value);
    
     buffer->begin = p + 1;
     request->state = HL_S_BEGIN;

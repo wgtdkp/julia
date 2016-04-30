@@ -27,14 +27,14 @@ static int dump_request(request_t* request)
     printf("status: %d\n", request->status);
     printf("method: %d\n", request->method);
     printf("version: %d.%d\n", request->version.major, request->version.minor);
-    print_string("request_line: %*s\n", request->request_line_begin,
-            request->request_line_end - request->request_line_begin);
-    print_string("uri: %*s\n", request->uri_begin,
-            request->uri_end - request->uri_begin);
-    print_string("schema: %*s\n", request->schema_begin,
-            request->schema_end - request->schema_begin);
-    print_string("host: %*s\n", request->host_begin,
-            request->host_end - request->host_begin);
+    print_string("request_line: %*s\n", request->request_line.begin,
+            request->request_line.end - request->request_line.begin);
+    print_string("uri: %*s\n", request->uri.begin,
+            request->uri.end - request->uri.begin);
+    print_string("schema: %*s\n", request->schema.begin,
+            request->schema.end - request->schema.begin);
+    print_string("host: %*s\n", request->host.begin,
+            request->host.end - request->host.begin);
     printf("state: %d\n", request->state);
     printf("reuqest_line_done: %d\n", request->request_line_done);
     printf("keep_alive: %d\n", request->keep_alive);
@@ -57,20 +57,14 @@ void request_init(request_t* request)
     request->method = M_GET;    // Any value is ok
     request->version.major = 0;
     request->version.minor = 0;
-
-    request->request_line_begin = NULL;
-    request->request_line_end = NULL;
-    request->method_begin = NULL;
-    request->uri_begin = NULL;
-    request->uri_end = NULL;
-    request->schema_begin = NULL;
-    request->schema_end = NULL;
-    request->host_begin = NULL;
-    request->host_end = NULL;
-    request->header_name_begin = NULL;
-    request->header_name_end = NULL;
-    request->header_value_begin = NULL;
-    request->header_value_end = NULL;
+    
+    string_init(&request->request_line);
+    string_init(&request->method_unparsed);
+    string_init(&request->uri);
+    string_init(&request->schema);
+    string_init(&request->host);
+    string_init(&request->header_name);
+    string_init(&request->header_value);
     request->invalid_header= false;
 
     request->state = 0;
