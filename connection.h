@@ -37,8 +37,8 @@ typedef struct {
 
     // For state machine
     string_t request_line;
-    string_t method_unparsed;
     string_t uri;
+    string_t extension;
     string_t schema;
     string_t host;
     string_t header_name;

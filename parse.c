@@ -19,15 +19,6 @@
 #define STR6_EQ(p, q)   (STR3_EQ(p, q) && STR3_EQ(p + 3, q + 3))
 #define STR7_EQ(p, q)   (STR3_EQ(p, q) && STR4_EQ(p + 3, q + 3))
 
-#define IS_DIGIT(ch)    (ch >= '0' && ch <= '9')
-
-#define IS_UPALPHA(ch)  ((ch) >= 'A' && (ch) <= 'Z')
-#define IS_LOALPHA(ch)  ((ch) >= 'a' && (ch) <= 'z')
-#define IS_ALPHA(ch)    (IS_LOALPHA(ch) || IS_UPALPHA(ch))
-
-#define TO_LOWCASE(ch)  ((ch) | 0x20)
-
-
 #define ERR_ON(cond, err)   \
 do {                        \
     if (cond)               \
@@ -55,7 +46,54 @@ static const char token_tb[128] = {
 };
 */
 
-static int parse_uri(request_t* request, char ch);
+// State machine: request line states
+enum {
+    // Request line states
+    RL_S_BEGIN = 0,
+    RL_S_METHOD,
+    RL_S_SP_BEFORE_URI,
+    RL_S_URI,
+    RL_S_SCHEMA,
+    RL_S_SCHEMA_COLON,
+    RL_S_SCHEMA_SLASH,
+    RL_S_SCHEMA_SLASH_SLASH,
+    RL_S_HOST_IP_LITERAL,
+    RL_S_HOST,
+    RL_S_HOST_END,
+    RL_S_PORT,
+    RL_S_SP_BEFROE_VERSION,
+    RL_S_HTTP_H,
+    RL_S_HTTP_HT,
+    RL_S_HTTP_HTT,
+    RL_S_HTTP_HTTP,
+    RL_S_HTTP_VERSION_SLASH,
+    RL_S_HTTP_VERSION_MAJOR,
+    RL_S_HTTP_VERSION_DOT,
+    RL_S_HTTP_VERSION_MINOR,
+    RL_S_SP_AFTER_VERSION,
+    RL_S_ALMOST_DONE,
+    RL_S_DONE,
+
+    // Header line states
+    HL_S_BEGIN,
+    HL_S_IGNORE,
+    HL_S_NAME,
+    HL_S_COLON,
+    HL_S_SP_BEFORE_VALUE,
+    HL_S_VALUE,
+    HL_S_SP_AFTER_VALUE,
+    HL_S_ALMOST_DONE,
+    HL_S_DONE,
+    
+    // URI states
+    URI_S_SLASH,
+    URI_S_ENTRY,
+    URI_S_EXTENSION, 
+};
+
+
+static int parse_uri(request_t* request, char* p);
+static int parse_method(char* begin, char* end);
 static int parse_request_line(request_t* request);
 static int parse_header_line(request_t* request);
 static int parse_request_body(request_t* request);
@@ -94,52 +132,52 @@ int request_parse(request_t* request)
     return err;
 }
 
-// State machine: request line states
-enum {
-    // Request line state
-    RL_S_BEGIN = 0,
-    RL_S_METHOD,
-    RL_S_SP_BEFORE_URI,
-    RL_S_URI_SLASH,
-    RL_S_URI_ASTERIK,
-    RL_S_SCHEMA,
-    RL_S_SCHEMA_COLON,
-    RL_S_SCHEMA_SLASH,
-    RL_S_SCHEMA_SLASH_SLASH,
-    RL_S_HOST_IP_LITERAL,
-    RL_S_HOST,
-    RL_S_HOST_END,
-    RL_S_PORT,
-    RL_S_SP_BEFROE_VERSION,
-    RL_S_HTTP_H,
-    RL_S_HTTP_HT,
-    RL_S_HTTP_HTT,
-    RL_S_HTTP_HTTP,
-    RL_S_HTTP_VERSION_SLASH,
-    RL_S_HTTP_VERSION_MAJOR,
-    RL_S_HTTP_VERSION_DOT,
-    RL_S_HTTP_VERSION_MINOR,
-    RL_S_SP_AFTER_VERSION,
-    RL_S_ALMOST_DONE,
-    RL_S_DONE,
-
-    // Header line state
-    HL_S_BEGIN,
-    HL_S_IGNORE,
-    HL_S_NAME,
-    HL_S_COLON,
-    HL_S_SP_BEFORE_VALUE,
-    HL_S_VALUE,
-    HL_S_SP_AFTER_VALUE,
-    HL_S_ALMOST_DONE,
-    HL_S_DONE,
-};
-
-enum {
-    URI_S_SLASH = 0,
-    URI_S_ENTRY,
-
-};
+static inline int parse_method(char* begin, char* end)
+{
+    // End of method
+    int len = end - begin;
+    switch (len) {
+    case 3:
+        if (STR3_EQ(begin, "GET"))
+            return M_GET;
+        else if(STR3_EQ(begin, "PUT"))
+            return M_PUT;
+        else
+            return ERR_INVALID_METHOD;
+        break;
+    case 4:
+        if (STR4_EQ(begin, "POST"))
+            return M_POST;
+        else if (STR4_EQ(begin, "HEAD"))
+            return M_HEAD;
+        else
+            return ERR_INVALID_METHOD;
+        break;
+    case 5:
+        if (STR5_EQ(begin, "TRACE"))
+            return M_TRACE;
+        else
+            return ERR_INVALID_METHOD;
+        break;
+    case 6:
+        if (STR6_EQ(begin, "DELETE"))
+            return M_DELETE;
+        else
+            return ERR_INVALID_METHOD;
+        break;
+    case 7:
+        if (STR7_EQ(begin, "CONNECT"))
+            return M_CONNECT;
+        else if (STR7_EQ(begin, "OPTIONS"))
+            return M_OPTIONS;
+        else
+            return ERR_INVALID_METHOD;
+        break;
+    default:
+        return ERR_INVALID_METHOD;
+    }
+    return ERR_INVALID_METHOD;   
+}
 
 static int parse_request_line(request_t* request)
 {
@@ -150,61 +188,27 @@ static int parse_request_line(request_t* request)
         
         switch (request->state) {
         case RL_S_BEGIN:
-            request->request_line.begin = p;
-            request->method_unparsed.begin = p;
-            ERR_ON(!IS_UPALPHA(ch), ERR_INVALID_REQUEST);
-            request->state = RL_S_METHOD;
+            switch (ch) {
+            case 'A' ... 'Z':
+                request->request_line.begin = p;
+                request->state = RL_S_METHOD;
+                break;
+            default:
+                return ERR_INVALID_REQUEST;
+            }
             break;
 
         case RL_S_METHOD:
-            if (IS_UPALPHA(ch))
+            switch (ch) {
+            case 'A' ... 'Z':
                 break;
-            ERR_ON(ch != ' ', ERR_INVALID_METHOD);
-            
-            // End of method
-            char* m = request->method_unparsed.begin;
-            int len = p - m;
-            switch (len) {
-            case 3:
-                if (STR3_EQ(m, "GET"))
-                    request->method = M_GET;
-                else if(STR3_EQ(m, "PUT"))
-                    request->method = M_PUT;
-                else
+            case ' ':
+                request->method = parse_method(request->request_line.begin, p);
+                if (request->method == ERR_INVALID_METHOD)
                     return ERR_INVALID_METHOD;
+                request->state = RL_S_SP_BEFORE_URI;
                 break;
-            case 4:
-                if (STR4_EQ(m, "POST"))
-                    request->method = M_POST;
-                else if (STR4_EQ(m, "HEAD"))
-                    request->method = M_HEAD;
-                else
-                    return ERR_INVALID_METHOD;
-                break;
-            case 5:
-                if (STR5_EQ(m, "TRACE"))
-                    request->method = M_TRACE;
-                else
-                    return ERR_INVALID_METHOD;
-                break;
-            case 6:
-                if (STR6_EQ(m, "DELETE"))
-                    request->method = M_DELETE;
-                else
-                    return ERR_INVALID_METHOD;
-                break;
-            case 7:
-                if (STR7_EQ(m, "CONNECT"))
-                    request->method = M_CONNECT;
-                else if (STR7_EQ(m, "OPTIONS"))
-                    request->method = M_OPTIONS;
-                else
-                    return ERR_INVALID_METHOD;
-                break;
-            default:
-                return ERR_INVALID_METHOD;
             }
-            request->state = RL_S_SP_BEFORE_URI;
             break;
 
         case RL_S_SP_BEFORE_URI:
@@ -213,22 +217,22 @@ static int parse_request_line(request_t* request)
             // absoluteURI: FIRST set: {alpha}
             // abs_path:    FIRST set: {'/'}
             // authority ?
-            if (ch == '/') {
-                request->uri.begin = p;
-                request->state = RL_S_URI_SLASH;
+            switch (ch) {
+            case ' ':
                 break;
-            } else if (ch == '*') {
+            case '/':
                 request->uri.begin = p;
-                request->state = RL_S_URI_ASTERIK;
+                request->uri_state = URI_S_SLASH;
+                request->state = RL_S_URI;
                 break;
-            }
-
-            if (IS_ALPHA(ch)) {
+            case 'a' ... 'z':
+            case 'A' ... 'Z':
                 request->schema.begin = p;
                 request->state = RL_S_SCHEMA;
                 break;
+            default:
+                return ERR_INVALID_REQUEST;
             }
-            ERR_ON(ch != ' ', ERR_INVALID_REQUEST);
             break;
 
         case RL_S_SCHEMA:
@@ -295,7 +299,8 @@ static int parse_request_line(request_t* request)
                 break;
             case '/':
                 request->uri.begin = p;
-                request->state = RL_S_URI_SLASH;
+                request->uri_state = URI_S_SLASH;
+                request->state = RL_S_URI;
                 break;
             case ' ':
                 // Must ended by '/'
@@ -324,7 +329,7 @@ static int parse_request_line(request_t* request)
                 break;
             case '/':
                 request->uri.begin = p;
-                request->state = RL_S_URI_SLASH;
+                request->state = RL_S_URI;
                 break;
             case ' ':
             default:
@@ -332,19 +337,26 @@ static int parse_request_line(request_t* request)
             }
             break;
 
-        case RL_S_URI_SLASH:
+        case RL_S_URI:
             switch (ch) {
             case ' ':
                 request->uri.end = p;
+                if (request->extension.begin != NULL) {
+                    ++request->extension.begin;
+                    request->extension.end = p;
+                }
+                if (request->extension.begin != NULL)
+                    print_string("extension: %*s\n", request->extension);
                 request->state = RL_S_SP_BEFROE_VERSION;
                 break;
             case '\t':
             case '\r':
             case '\n':
                 return ERR_INVALID_REQUEST;
-            default:
-                ERR_ON(parse_uri(request, ch) != OK,
-                        ERR_INVALID_REQUEST);
+            default: {
+                    int uri_err = parse_uri(request, p);
+                    ERR_ON(uri_err != OK, uri_err);
+                }
                 break;
             }
             break;
@@ -356,6 +368,8 @@ static int parse_request_line(request_t* request)
             case 'H':
                 request->state = RL_S_HTTP_H;
                 break;
+            default:
+                return ERR_INVALID_REQUEST;
             }
             break;
 
@@ -474,9 +488,10 @@ done:
     return OK;
 }
 
-
 static int parse_header_line(request_t* request)
 {
+
+    
     buffer_t* buffer = &request->buffer;
     char* p;
     for (p = buffer->begin; p < buffer->end; p++) {
@@ -611,7 +626,7 @@ header_done:
     // DEBUG:
     if (NULL != request->header_name.begin)
         print_string("name: %*s\n", request->header_name);
-    if (NULL != request->header_name.end)
+    if (NULL != request->header_value.begin)
         print_string("value: %*s\n", request->header_value);
 
     // Reset states
@@ -622,15 +637,54 @@ header_done:
     return OK;
 }
 
-static int parse_uri(request_t* request, char ch)
-{
+static int parse_uri(request_t* request, char* p)
+{ 
+    char ch = *p;
     switch (request->uri_state) {
     case URI_S_SLASH:
         switch (ch) {
         case '/':
             break;
-
+        case '.':
+            request->extension.begin = p;
+            request->uri_state = URI_S_EXTENSION;
+            break;
+        default:
+            request->uri_state = URI_S_ENTRY;
+            break;
         }
+        break;
+
+    case URI_S_ENTRY:
+        switch (ch) {
+        case '/':
+            request->uri_state = URI_S_SLASH;
+            break;
+        case '.':
+            request->extension.begin = p;
+            request->uri_state = URI_S_EXTENSION;
+            break;
+        default:
+            break;
+        }
+        break;
+   
+    case URI_S_EXTENSION:
+        switch(ch) {
+        case '/':
+            request->extension.begin = NULL;
+            request->extension.end = NULL;
+            request->uri_state = URI_S_SLASH;
+            break;
+        case '.':
+            request->extension.begin = p;
+            break;
+        default:
+            break;
+        }
+        break;
+    default:
+        assert(0);
     }
     return OK;
 }
@@ -642,7 +696,8 @@ static int parse_request_body(request_t* request)
 }
 
 /*
-general-header = Cache-Control            ; Section 14.9
+
+general-header = Cache-Control           ; Section 14.9
               | Connection               ; Section 14.10
               | Date                     ; Section 14.18
               | Pragma                   ; Section 14.32
@@ -652,7 +707,7 @@ general-header = Cache-Control            ; Section 14.9
               | Via                      ; Section 14.45
               | Warning                  ; Section 14.46
 
-request-header = Accept                   ; Section 14.1
+request-header = Accept                  ; Section 14.1
               | Accept-Charset           ; Section 14.2
               | Accept-Encoding          ; Section 14.3
               | Accept-Language          ; Section 14.4
@@ -672,7 +727,7 @@ request-header = Accept                   ; Section 14.1
               | TE                       ; Section 14.39
               | User-Agent               ; Section 14.43
 
-response-header = Accept-Ranges           ; Section 14.5
+response-header = Accept-Ranges          ; Section 14.5
                | Age                     ; Section 14.6
                | ETag                    ; Section 14.19
                | Location                ; Section 14.30
@@ -682,6 +737,18 @@ response-header = Accept-Ranges           ; Section 14.5
                | Vary                    ; Section 14.44
                | WWW-Authenticate        ; Section 14.47
 
+entity-header  = Allow                    ; Section 14.7
+                | Content-Encoding         ; Section 14.11
+                | Content-Language         ; Section 14.12
+                | Content-Length           ; Section 14.13
+                | Content-Location         ; Section 14.14
+                | Content-MD5              ; Section 14.15
+                | Content-Range            ; Section 14.16
+                | Content-Type             ; Section 14.17
+                | Expires                  ; Section 14.21
+                | Last-Modified            ; Section 14.29
+                | extension-header
+extension-header = message-header
 */
 
 

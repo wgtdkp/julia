@@ -55,16 +55,17 @@ void request_init(request_t* request)
     request->version.minor = 0;
     
     string_init(&request->request_line);
-    string_init(&request->method_unparsed);
     string_init(&request->uri);
+    string_init(&request->extension);
     string_init(&request->schema);
     string_init(&request->host);
     string_init(&request->header_name);
     string_init(&request->header_value);
-    request->invalid_header= false;
+    
+    request->invalid_header = false;
 
-    request->state = 0;
-    request->uri_state = 0;
+    request->state = 0; // RL_S_BEGIN
+    request->uri_state = 0; // Meaningless
     request->request_line_done = false;
     request->headers_done = false;
     request->body_done = false;
