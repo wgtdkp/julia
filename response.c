@@ -5,7 +5,7 @@
 
 // The key of (extension, mime-type) pair should be kept in lexicographical order.
 // As we will use simple binary search on this array to get the specifical mime-type.
-// A little more attention when add more (extension, mime-type) items.
+// A little more attention when add more (extension, mime-type) pairs.
 static const char* mime_map[][2] = {
     {"css",     "text/css"},
     {"htm",     "text/html"},

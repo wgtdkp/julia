@@ -3,6 +3,7 @@
 #include <stddef.h>
 #include "string.h"
 
+
 /*
  * Headers map
  */
@@ -26,6 +27,9 @@ struct header_node {
 #define MAP_SIZE    (131)
 static header_slot_t header_map[2 * MAP_SIZE];
 static header_slot_t* header_cur;
+
+static void header_insert(hash_t hash, string_t header, int offset);
+static hash_t string_hash(string_t* str);
 
 static void header_insert(hash_t hash, string_t header, int offset)
 {
@@ -117,6 +121,12 @@ void header_init(void)
     PUT_HEADER(headers_out_t, www_authenticate);
 }
 
+/*
+ * WARNING(wgtdkp): it is possible that, 
+ * we receive a header in request
+ * that can only be included in response.
+ * Then, we incorrectly setup the request header's value! 
+ */
 int header_offset(hash_t hash, string_t header)
 {
     header_slot_t* slot = &header_map[hash % MAP_SIZE];

@@ -3,6 +3,7 @@
 
 #include "connection.h"
 
+
 void request_init(request_t* request);
 void request_release(request_t* request);
 void request_clear(request_t* request);

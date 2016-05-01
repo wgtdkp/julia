@@ -13,5 +13,4 @@ static inline hash_t header_hash(hash_t hash, int ch)
     return (hash * 31) + ch;
 }
 
-
 #endif
