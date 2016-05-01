@@ -263,8 +263,7 @@ int main(int argc, char* argv[])
                 while (true) { // We could accept more than one connection per request
                     int connection_fd = accept(fd, NULL, NULL);
                     if (connection_fd == -1) {
-                        EXIT_ON((errno != EWOULDBLOCK),
-                                "accept");
+                        EXIT_ON((errno != EWOULDBLOCK), "accept");
                         break;
                     }
                     connection_t* connection = new_connection(connection_fd);
