@@ -27,6 +27,7 @@
 
 #define DEBUG(msg)  fprintf(stderr, "%s\n", (msg));
 
+
 static int startup(unsigned short port);
 static int server_init(void);
 
@@ -65,43 +66,7 @@ int put_response(connection_t* connection)
     assert(0);
     send_test_response(connection);
     //event_set_to(connection, EVENTS_IN);
-/*
-    char begin[1024];
-    char* buf = begin;
-    buf += sprintf(buf, "HTTP/%1d.%1d %3d %s \r\n", 
-            http_version[0],
-            http_version[1],
-            response->status,
-            status_repr(response->status));
-    buf += sprintf(buf, "server: julia/0.0.0 \r\n");
 
-    if (response->is_script && response->status == 200) {
-        buf += sprintf(buf, "transfer-encoding: chuncked \r\n");
-        write(client, begin, buf - begin);
-        return handle_cgi(client, request, resource);
-    }
-
-    // If has content
-     buf += sprintf(buf, "contend-type: %s \r\n",
-                response->content_type);
-    if (response->content_fd != -1) {
-        struct stat fst;
-        fstat(response->content_fd, &fst);
-        int size = fst.st_size;
-        buf += sprintf(buf, "content-length: %d \r\n", size);
-    } else {
-        buf += sprintf(buf, "content-length: %d \r\n", 0);
-    }
-
-
-    buf += sprintf(buf, "\r\n");
-    write(client, begin, buf - begin);
-    
-    // Send content, if has
-    if (response->content_fd != -1) {
-        cat(client, response->content_fd);
-    }
-*/
     return 0;
 }
 
@@ -177,20 +142,6 @@ static int transfer_chunk(int des, int src)
 */
 
 /*
-static int cats(int des, const char* src, int n)
-{
-    int readed = 0;
-    do {
-        int len = write(des, src + readed, n);
-        if (len < 0) break;
-        n -= len;
-        readed += len;
-    } while (n > 0);
-    return readed;
-}
-*/
-
-/*
 static void setup_env(request_t* request, const char* script_path)
 {
     // [POS34-C]: Do not call putenv() with a pointer to an automatic variable as the argument
@@ -217,46 +168,6 @@ static void setup_env(request_t* request, const char* script_path)
     }
 }
 */
-
-/*
-// Read from src file to des file
-static int cat(int des, int src)
-{
-    struct stat st;
-    assert(fstat(src, &st) != -1);
-    int len = st.st_size;
-    if (len == 0)
-        return 0;
-    // TODO(wgtdkp): it may be not possible for big file to be mapped into memory
-    char* addr = mmap(NULL, len, PROT_READ, MAP_PRIVATE, src, 0);
-    assert(addr != MAP_FAILED);
-    // TODO(wgtdkp): handle partial write
-    assert(cats(des, addr, len) == len);
-    munmap(addr, len);
-    return len;
-}
-*/
-
-/*
-// Read n bytes from src file to des file
-static int catn(int des, int src, int n)
-{
-    // 500KiB buffer
-    static const int buf_size = 500 * 1024;
-    char buf[buf_size];
-    int len, readed = 0;
-    do {
-        int size = min(buf_size, n);
-        len = read(src, buf, size);
-        if (len < 0) break;
-        write(des, buf, len);
-        readed += len;
-        n -= len;
-    } while (n > 0);    assert(n == 0);
-    return readed;
-}
-*/
-
 
 static int startup(unsigned short port)
 {
@@ -319,7 +230,6 @@ int main(int argc, char* argv[])
     if (argc < 3) {
         usage(); exit(-1);
     }
-    //config(argv[2]);
 
     int listen_fd = -1;
     unsigned short port = atoi(argv[1]);
@@ -331,7 +241,6 @@ int main(int argc, char* argv[])
     }
 
     printf("julia started...\n");
-    //printf("doc root: %s\n", www_dir);
     printf("listening at port: %d\n", port);
     fflush(stdout);
 
@@ -352,10 +261,7 @@ int main(int argc, char* argv[])
             int fd = *((int*)(events[i].data.ptr));
             if (fd == listen_fd) {
                 while (true) { // We could accept more than one connection per request
-                    //struct sockaddr_in client;
-                    //socklen_t client_len = sizeof(client);
                     int connection_fd = accept(fd, NULL, NULL);
-                    //        (struct sockaddr*)&client, &client_len);
                     if (connection_fd == -1) {
                         EXIT_ON((errno != EWOULDBLOCK),
                                 "accept");
