@@ -27,23 +27,8 @@
 
 #define DEBUG(msg)  fprintf(stderr, "%s\n", (msg));
 
-
-/*
-static char default_index[] = "index.php";
-static char default_404[256];
-static char default_403[256];
-static char default_unimpl[256];
-static char www_dir[256];
-*/
-
-static const response_t default_response = {
-    .status = 200,
-    .content_type = "text/html",
-    .content_fd = -1,
-    .is_script = 0
-};
-
 static int startup(unsigned short port);
+static int server_init(void);
 
 int put_response(connection_t* connection);;
 
@@ -306,6 +291,14 @@ static int startup(unsigned short port)
     return listen_fd;
 }
 
+static int server_init(void)
+{
+    header_init();
+    epoll_init();
+    // TODO(wgtdkp): other initiations
+    return OK;
+}
+
 static void usage(void)
 {
     fprintf(stderr, "Usage:\n"
@@ -342,7 +335,7 @@ int main(int argc, char* argv[])
     printf("listening at port: %d\n", port);
     fflush(stdout);
 
-    epoll_init();
+    server_init();
     event_add_listen(&listen_fd);
     while (true) {
         int nfds = epoll_wait(epoll_fd, events, MAX_EVENT_NUM, 3000);

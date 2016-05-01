@@ -1,7 +1,7 @@
 TARGET = julia
 
 CC = gcc
-SRCS = buffer.c connection.c parse.c request.c response.c server.c string.c util.c
+SRCS = buffer.c connection.c map.c parse.c request.c response.c server.c string.c util.c
 CFLAGS = -g -std=c11 -Wall -D_XOPEN_SOURCE -D_GNU_SOURCE 
 
 OBJS_DIR = build/

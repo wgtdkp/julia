@@ -61,7 +61,7 @@ void request_init(request_t* request)
     string_init(&request->host);
     string_init(&request->header_name);
     string_init(&request->header_value);
-    
+
     request->invalid_header = false;
 
     request->state = 0; // RL_S_BEGIN
@@ -116,16 +116,6 @@ int handle_request(connection_t* connection)
     }
 
     // TOD(wgtdkp): process headers
-
-    if (buffer->end >= buffer->limit) {
-        // TODO(wgtdkp): too bigger request header
-        assert(0);
-    }
-
-    if (request->request_line_done) {
-        //printf("parse request line done\n");
-        fflush(stdout);
-    }
 
     // DEBUG: 
     if (request->saw_eof) {

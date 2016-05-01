@@ -4,7 +4,9 @@
 
 #include <assert.h>
 #include <fcntl.h>
+#include <stddef.h>
 #include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 
 typedef union connection_node connection_node_t;

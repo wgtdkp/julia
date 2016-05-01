@@ -4,6 +4,7 @@
 
 #include "parse.h"
 #include "buffer.h"
+#include "map.h"
 #include "request.h"
 #include "string.h"
 #include "util.h"
@@ -111,9 +112,11 @@ int request_parse(request_t* request)
     }
 
     if (request->request_line_done && !request->headers_done) {
-        while (buffer_size(&request->buffer) > 0) {
+        while (true) {
             err = parse_header_line(request);
             if (request->headers_done)
+                break;
+            if (err == AGAIN)
                 break;
             if (err != OK)
                 return err;
@@ -490,23 +493,36 @@ done:
 
 static int parse_header_line(request_t* request)
 {
-
-    
     buffer_t* buffer = &request->buffer;
+    hash_t hash = 0;
     char* p;
     for (p = buffer->begin; p < buffer->end; p++) {
         char ch = *p;
         switch (request->state) {
         case HL_S_BEGIN:
+            // Reset states
+            string_init(&request->header_name);
+            string_init(&request->header_value);
+            request->invalid_header = false;
             switch(ch) {
-            case '0' ... '9':
             case 'A' ... 'Z':
-            case 'a' ... 'z':
+                *p = *p - 'A' + 'a';
+                ch = *p;
+                hash = header_hash(0, ch);
+                request->header_name.begin = p;
+                request->state = HL_S_NAME;
+                break;
             case '-':
+                *p = *p - '-' + '_';
+                ch = *p;
+            case '0' ... '9':
+            case 'a' ... 'z':
+                hash = header_hash(0, ch);
                 request->header_name.begin = p;
                 request->state = HL_S_NAME;
                 break;
             case '\r':
+                request->invalid_header = true;
                 request->headers_done = true;
                 request->state = HL_S_ALMOST_DONE;
                 break;
@@ -530,10 +546,17 @@ static int parse_header_line(request_t* request)
 
         case HL_S_NAME:
             switch(ch) {
-            case '0' ... '9':
             case 'A' ... 'Z':
-            case 'a' ... 'z':
+                *p = *p - 'A' + 'a';
+                ch = *p;
+                hash = header_hash(hash, ch);
+                break;
             case '-':
+                *p = *p - '-' + '_';
+                ch = *p;
+            case '0' ... '9':
+            case 'a' ... 'z':
+                hash = header_hash(hash, ch);
                 break;
             case ':':
                 request->header_name.end = p;
@@ -620,18 +643,22 @@ static int parse_header_line(request_t* request)
     }
     
     buffer->begin = buffer->end;
-    return OK;
+    return AGAIN;
 
 header_done:
     // DEBUG:
-    if (NULL != request->header_name.begin)
+    if (!request->invalid_header) {
         print_string("name: %*s\n", request->header_name);
-    if (NULL != request->header_value.begin)
         print_string("value: %*s\n", request->header_value);
-
-    // Reset states
-    string_init(&request->header_name);
-    string_init(&request->header_value);
+        int offset = header_offset(hash, request->header_name);
+        if (offset < 0) {   // Can't recognize this header
+            // TODO(wgtdkp): log it!
+            request->invalid_header = true;
+        } else {
+            string_t* member = (string_t*)((void*)&request->headers + offset);
+            *member = request->header_value;
+        }
+    }
     buffer->begin = p + 1;
     request->state = HL_S_BEGIN;
     return OK;

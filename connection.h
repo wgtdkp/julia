@@ -6,10 +6,70 @@
 #include "string.h"
 
 #include <sys/epoll.h>
-#include <stdbool.h>
+#include <stdbool.h> 
+
+
+#define COMMON_HEADERS              \
+    /* General headers */           \
+    string_t cache_control;         \
+    string_t connection;            \
+    string_t date;                  \
+    string_t pragma;                \
+    string_t trailer;               \
+    string_t transfer_encoding;     \
+    string_t upgrade;               \
+    string_t via;                   \
+    string_t warning;               \
+    /* Entity headers */            \
+    string_t allow;                 \
+    string_t content_encoding;      \
+    string_t content_language;      \
+    string_t content_length;        \
+    string_t content_location;      \
+    string_t content_md5;           \
+    string_t content_range;         \
+    string_t content_type;          \
+    string_t expires;               \
+    string_t last_modified;
 
 extern int epoll_fd;
 extern struct epoll_event events[MAX_EVENT_NUM];
+
+typedef struct {
+    COMMON_HEADERS
+    string_t accept;
+    string_t accept_charset;
+    string_t accept_encoding;
+    string_t authorization;
+    string_t expect;
+    string_t from;
+    string_t host;
+    string_t if_match;
+    string_t if_modified_since;
+    string_t if_none_match;
+    string_t if_range;
+    string_t if_unmodified_since;
+    string_t max_forwards;
+    string_t proxy_authorization;
+    string_t range;
+    string_t referer;
+    string_t te;
+    string_t user_agent;
+} headers_in_t;
+
+typedef struct {
+    COMMON_HEADERS
+    string_t accept_ranges;
+    string_t age;
+    string_t etag;
+    string_t location;
+    string_t proxy_authenticate;
+    string_t retry_after;
+    string_t server;
+    string_t vary;
+    string_t www_authenticate;
+} headers_out_t;
+
 
 /********************
  * Request
@@ -32,7 +92,7 @@ typedef struct {
         int major;
         int minor;
     } version;
-
+    headers_in_t headers;
     int status;
 
     // For state machine

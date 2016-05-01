@@ -26,3 +26,24 @@ int print_string(const char* format, ...)
     va_end(args);
     return ret;
 }
+
+int string_cmp(string_t* lhs, string_t* rhs)
+{
+    if (lhs->begin == rhs->begin && lhs->end == rhs->end)
+        return 0;
+    if (lhs->begin == NULL)
+        return -1;
+    if (rhs->begin == NULL)
+        return 1;
+    char* pl = lhs->begin;
+    char* pr = rhs->begin;
+    for (; pl < lhs->end && pr < rhs->end; pl++, pr++) {
+        if (*pl < *pr)
+            return -1;
+        else if (*pl > *pr)
+            return 1;
+    }
+    if (pl == lhs->end && pr == rhs->end)
+        return 0;
+    return (pl == lhs->end) ? -1: 1;
+}
