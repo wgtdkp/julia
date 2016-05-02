@@ -1,12 +1,14 @@
 #ifndef _JULIA_UTIL_H_
 #define _JULIA_UTIL_H_
 
-#define OK  (0)
-#define AGAIN   (1)
+#define OK                  (0)
+#define AGAIN               (1)
+#define EMPTY_LINE          (2)
 #define ERR_INVALID_REQUEST (-1)
 #define ERR_INVALID_METHOD  (-2)
 #define ERR_INVALID_VERSION (-3)
 #define ERR_INTERNAL_ERROR  (-4)
+#define ERR_INVALID_HEADER  (-6)
 
 #define EXIT_ON(cond, msg)  \
 do {                        \

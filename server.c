@@ -1,4 +1,5 @@
 #include "connection.h"
+#include "map.h"
 #include "request.h"
 #include "response.h"
 #include "server.h"

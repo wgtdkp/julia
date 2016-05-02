@@ -98,41 +98,65 @@ static int parse_method(char* begin, char* end);
 static int parse_request_line(request_t* request);
 static int parse_header_line(request_t* request);
 static int parse_request_body(request_t* request);
-
+static void put_header(request_t* request);
 
 int request_parse(request_t* request)
 {
-    // 0. parse request line
-
-    int err = 0;
-    if (!request->request_line_done) {
-        err = parse_request_line(request);
-        if (err != OK)
-            return err;
-    }
-
-    if (request->request_line_done && !request->headers_done) {
-        while (true) {
-            err = parse_header_line(request);
-            if (request->headers_done)
-                break;
-            if (err == AGAIN)
-                break;
-            if (err != OK)
-                return err;
+    int res = 0;
+    if (request->stage == RS_REQUEST_LINE) {
+        res = parse_request_line(request);
+        if (res == OK) {
+            request->stage = RS_HEADERS;
+            // TODO(wgtdkp): process request line
+        } else {    // AGAIN or ERR
+            return res;
         }
     }
 
-    if (request->headers_done && !request->body_done) {
-        err = parse_request_body(request);
-        if (err != OK)
-            return err;
+    if (request->stage == RS_HEADERS) {
+        while (true) {
+            res = parse_header_line(request);
+            switch (res) {
+            case AGAIN:
+                return res;
+            case ERR_INVALID_HEADER:
+                return AGAIN;
+            case EMPTY_LINE:
+                request->stage = RS_BODY;
+                goto parse_body;
+            case OK:
+                put_header(request);
+                break; 
+            default:
+                assert(0);
+            }
+        }
     }
-    
-    // 1. parse header lines
 
-    // 2. parse header body
-    return err;
+parse_body:
+    if (request->stage == RS_BODY) {
+        res = parse_request_body(request);  
+    }
+
+    return res;
+}
+
+static void put_header(request_t* request)
+{
+    int offset = header_offset(request->header_hash, request->header_name);
+    if (offset < 0) {   // Can't recognize this header
+        // TODO(wgtdkp): log it!
+        
+    } else {
+        /*
+         * WARNING(wgtdkp): it is possible that, 
+         * we receive a header in request
+         * that can only be included in response.
+         * Then, we incorrectly setup the request header's value! 
+         */
+        string_t* member = (string_t*)((void*)&request->headers + offset);
+        *member = request->header_value;
+    }
 }
 
 static inline int parse_method(char* begin, char* end)
@@ -485,7 +509,6 @@ static int parse_request_line(request_t* request)
 
 done:
     buffer->begin = p + 1;
-    request->request_line_done = true;
     request->request_line.end = p;
     request->state = HL_S_BEGIN;
     return OK;
@@ -522,13 +545,11 @@ static int parse_header_line(request_t* request)
                 request->state = HL_S_NAME;
                 break;
             case '\r':
-                request->invalid_header = true;
                 request->headers_done = true;
                 request->state = HL_S_ALMOST_DONE;
                 break;
             case '\n':
             default:
-                request->invalid_header = true;
                 request->state = HL_S_IGNORE;
                 break;
             }
@@ -647,21 +668,13 @@ static int parse_header_line(request_t* request)
 
 header_done:
     // DEBUG:
-    if (!request->invalid_header) {
-        print_string("name: %*s\n", request->header_name);
-        print_string("value: %*s\n", request->header_value);
-        int offset = header_offset(hash, request->header_name);
-        if (offset < 0) {   // Can't recognize this header
-            // TODO(wgtdkp): log it!
-            request->invalid_header = true;
-        } else {
-            string_t* member = (string_t*)((void*)&request->headers + offset);
-            *member = request->header_value;
-        }
-    }
     buffer->begin = p + 1;
+    request->header_hash = hash;
     request->state = HL_S_BEGIN;
-    return OK;
+    if (request->invalid_header)
+        return ERR_INVALID_HEADER;
+    
+    return request->header_name.begin == NULL ? EMPTY_LINE: OK;
 }
 
 static int parse_uri(request_t* request, char* p)

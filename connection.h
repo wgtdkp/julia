@@ -2,6 +2,7 @@
 #define _JULIA_CONNECTION_H_
 
 #include "buffer.h"
+#include "map.h"
 #include "server.h"
 #include "string.h"
 
@@ -71,9 +72,9 @@ typedef struct {
 } headers_out_t;
 
 
-/********************
+/*
  * Request
- ********************/
+ */
 
 typedef enum {
     M_CONNECT = 0,
@@ -85,6 +86,13 @@ typedef enum {
     M_PUT,
     M_TRACE,
 } method_t;
+
+typedef enum {
+    RS_REQUEST_LINE = 0,
+    RS_HEADERS,
+    RS_BODY,
+    DS_DONE,
+} request_stage_t;
 
 typedef struct {
     method_t method;
@@ -103,38 +111,32 @@ typedef struct {
     string_t host;
     string_t header_name;
     string_t header_value;
-
+    hash_t header_hash;
+    
+    request_stage_t stage;
     int state;
     int uri_state;
     bool keep_alive;
     bool invalid_header;
-    bool request_line_done;
     bool headers_done;
-    bool body_done;
-    bool saw_eof;
     buffer_t buffer;
 } request_t;
 
 
-/*********************
+/*
  * Response
- *********************/
+ */
 
 typedef struct {
     int status;
-    const char* content_type;
-    int content_fd;
-    int is_script;
 
-    int send_cur;
-    char send_buf[SEND_BUF_SIZE];
-    bool ready; // response has been fully constructed
+    buffer_t buffer;
 } response_t;
 
 
-/*******************
+/*
  * Connection
- *******************/
+ */
 
  typedef struct {
     int fd; // socket fd

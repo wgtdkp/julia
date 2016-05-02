@@ -13,13 +13,18 @@
 #include <unistd.h>
 
 
-/****** request *******/
+/*
+ * Request
+ */
+
 void request_init(request_t* request)
 {
     request->status = 400;
     request->method = M_GET;    // Any value is ok
     request->version.major = 0;
     request->version.minor = 0;
+
+    memset(&request->headers, 0, sizeof(request->headers));
     
     string_init(&request->request_line);
     string_init(&request->uri);
@@ -28,16 +33,14 @@ void request_init(request_t* request)
     string_init(&request->host);
     string_init(&request->header_name);
     string_init(&request->header_value);
+    request->header_hash = 0;
 
     request->invalid_header = false;
 
+    request->stage = 0;
     request->state = 0; // RL_S_BEGIN
     request->uri_state = 0; // Meaningless
-    request->request_line_done = false;
-    request->headers_done = false;
-    request->body_done = false;
     request->keep_alive = false;
-    request->saw_eof = false;
 
     buffer_init(&request->buffer);
 }
@@ -57,20 +60,22 @@ int handle_request(connection_t* connection)
 {
     request_t* request = &connection->request;
     buffer_t* buffer = &request->buffer;
+    bool client_closed = false;
+
     int readed = buffer_read(connection->fd, buffer);
     
     // Client closed the connection
     if (readed <= 0) {
         readed = -readed;
-        request->saw_eof = true;
+        client_closed = true;
         // TODO(wgtdkp): remove EPOLLINT events
     }
 
     if (buffer_size(buffer) > 0)
         print_string("%*s", (string_t){buffer->begin, buffer->end});
-    
+
     int err = request_parse(request);
-    if (err != OK) {
+    if (err != OK && err != AGAIN) {
         // TODO(wgtdkp): update request state
         // Response bad request
         printf("err: %d\n", err);
@@ -80,12 +85,14 @@ int handle_request(connection_t* connection)
 
     // TODO(wgtdkp): process headers
 
-    // DEBUG: 
-    if (request->saw_eof) {
+    if (client_closed) {
         printf("connection closed\n");
         fflush(stdout);
         connection_close(connection);
     }
 
+    // TODO(wgtdkp): request done, 
+    // send response directly, until send buffer is full.
+    
     return 0;
 }
