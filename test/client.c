@@ -78,7 +78,7 @@ int main(int argc, char* argv[])
                  "Upgrade-Insecure-Requests: 1       \r\n"
                  "User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Ubuntu Chromium/49.0.2623.108 Chrome/49.0.2623.108 Safari/537.36     \r\n"
                  "Accept-Encoding: gzip, deflate, sdch      \r\n"
-                 "Accept-Language: zh-CN,zh;q=0.8,ko;q=0.6           \r\n";
+                 "Accept-Language: zh-CN,zh;q=0.8,ko;q=0.6           \r\n\r\n";
     for (char* p = str; *p != 0; p++) {
         assert(1 == send(fd, p, 1, 0));
         printf("%c", *p);
