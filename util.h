@@ -10,6 +10,8 @@
 #define ERR_INTERNAL_ERROR  (-4)
 #define ERR_INVALID_HEADER  (-6)
 
+#define CRLF                ("\r\n")
+
 #define EXIT_ON(cond, msg)  \
 do {                        \
     if (cond)               \

@@ -56,7 +56,7 @@ typedef struct {
     string_t referer;
     string_t te;
     string_t user_agent;
-} headers_in_t;
+} request_headers_t;
 
 typedef struct {
     COMMON_HEADERS
@@ -69,7 +69,7 @@ typedef struct {
     string_t server;
     string_t vary;
     string_t www_authenticate;
-} headers_out_t;
+} response_headers_t;
 
 
 /*
@@ -100,7 +100,7 @@ typedef struct {
         int major;
         int minor;
     } version;
-    headers_in_t headers;
+    request_headers_t headers;
     int status;
 
     // For state machine
@@ -129,7 +129,7 @@ typedef struct {
 
 typedef struct {
     int status;
-
+    response_headers_t headers;
     buffer_t buffer;
 } response_t;
 
