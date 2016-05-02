@@ -63,13 +63,13 @@ void header_init(void)
         slot->next = NULL;
     }
     header_cur = &header_map[MAP_SIZE];
-    
+
     // Init headers
-#   define PUT_HEADER(inout, member)                        \
-        {                                                   \
-            string_t header = string_setto(#member);        \
-            header_insert(string_hash(&header),             \
-            header, offsetof(inout, member));               \
+#   define PUT_HEADER(headers, member)                  \
+        {                                               \
+            string_t header = string_setto(#member);    \
+            header_insert(string_hash(&header),         \
+            header, offsetof(headers, member));         \
         }
     PUT_HEADER(request_headers_t, cache_control);
     PUT_HEADER(request_headers_t, connection);
@@ -109,16 +109,6 @@ void header_init(void)
     PUT_HEADER(request_headers_t, referer);
     PUT_HEADER(request_headers_t, te);
     PUT_HEADER(request_headers_t, user_agent);
-    
-    PUT_HEADER(response_headers_t, accept_ranges);
-    PUT_HEADER(response_headers_t, age);
-    PUT_HEADER(response_headers_t, etag);
-    PUT_HEADER(response_headers_t, location);
-    PUT_HEADER(response_headers_t, proxy_authenticate);
-    PUT_HEADER(response_headers_t, retry_after);
-    PUT_HEADER(response_headers_t, server);
-    PUT_HEADER(response_headers_t, vary);
-    PUT_HEADER(response_headers_t, www_authenticate);
 }
 
 

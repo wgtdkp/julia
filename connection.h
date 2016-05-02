@@ -105,20 +105,25 @@ typedef struct {
 
     // For state machine
     string_t request_line;
-    string_t uri;
-    string_t extension;
-    string_t schema;
-    string_t host;
     string_t header_name;
     string_t header_value;
     hash_t header_hash;
-    
+
+    struct {
+        string_t scheme;
+        string_t host;
+        string_t port;
+        string_t abs_path;
+        string_t extension;
+        string_t query;
+        int state;
+    } uri;
+
     request_stage_t stage;
     int state;
     int uri_state;
     bool keep_alive;
-    bool invalid_header;
-    bool headers_done;
+
     buffer_t buffer;
 } request_t;
 

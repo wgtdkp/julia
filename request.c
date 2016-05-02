@@ -19,7 +19,7 @@
 
 void request_init(request_t* request)
 {
-    request->status = 400;
+    request->status = 200;
     request->method = M_GET;    // Any value is ok
     request->version.major = 0;
     request->version.minor = 0;
@@ -27,15 +27,10 @@ void request_init(request_t* request)
     memset(&request->headers, 0, sizeof(request->headers));
     
     string_init(&request->request_line);
-    string_init(&request->uri);
-    string_init(&request->extension);
-    string_init(&request->schema);
-    string_init(&request->host);
     string_init(&request->header_name);
     string_init(&request->header_value);
     request->header_hash = 0;
-
-    request->invalid_header = false;
+    memset(&request->uri, 0, sizeof(request->uri));
 
     request->stage = 0;
     request->state = 0; // RL_S_BEGIN
@@ -75,12 +70,15 @@ int handle_request(connection_t* connection)
         print_string("%*s", (string_t){buffer->begin, buffer->end});
 
     int err = request_parse(request);
+
     if (err != OK && err != AGAIN) {
         // TODO(wgtdkp): update request state
         // Response bad request
-        printf("err: %d\n", err);
-        fflush(stdout);
-        connection_close(connection);
+        request->status = 400;
+    } else {
+        if (request->stage > RS_REQUEST_LINE) {
+            // TODO(wgtdkp): process_request_line();
+        }
     }
 
     // TODO(wgtdkp): process headers

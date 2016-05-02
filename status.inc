@@ -30,7 +30,7 @@ case 412: return "Precondition Failed";
 case 413: return "Request Entity Too Large";
 case 414: return "Request-URI Too Large";
 case 415: return "Unsupported Media Type";
-case 416: return "request_ted range not satisfiable";
+case 416: return "Requested range not satisfiable";
 case 417: return "Expectation Failed";
 case 500: return "Internal Server Error";
 case 501: return "Not Implemented";

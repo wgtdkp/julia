@@ -9,6 +9,7 @@
 #define ERR_INVALID_VERSION (-3)
 #define ERR_INTERNAL_ERROR  (-4)
 #define ERR_INVALID_HEADER  (-6)
+#define ERR_INVALID_URI     (-7)
 
 #define CRLF                ("\r\n")
 
