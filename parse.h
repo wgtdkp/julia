@@ -3,6 +3,8 @@
 
 #include "request.h"
 
-int request_parse(request_t* request);
+int parse_request_line(request_t* request);
+int parse_header_line(request_t* request);
+int parse_request_body(request_t* request);;
 
 #endif

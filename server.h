@@ -16,4 +16,6 @@ enum {
     
 };
 
+extern int doc_root_fd;
+
 #endif

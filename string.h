@@ -19,9 +19,9 @@ static inline void string_init(string_t* str)
 /*
  *  Initiate a string_t with zero terminated char stream
  */
-static inline string_t string_setto(char* stream)
+static inline string_t string_setto(char* cstr)
 {
-    return (string_t){stream, stream + strlen(stream)};
+    return (string_t){cstr, cstr + strlen(cstr)};
 }
 
 int print_string(const char* format, ...);

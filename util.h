@@ -11,7 +11,9 @@
 #define ERR_INVALID_HEADER  (-6)
 #define ERR_INVALID_URI     (-7)
 
-#define CRLF                ("\r\n")
+#define ERR_STATUS(status)  (-status)
+
+#define CRLF                "\r\n"
 
 #define EXIT_ON(cond, msg)  \
 do {                        \

@@ -72,6 +72,18 @@ typedef struct {
 } response_headers_t;
 
 
+
+typedef struct {
+    string_t scheme;
+    string_t host;
+    string_t port;
+    string_t abs_path;
+    string_t extension;
+    string_t query;
+    int nddots;
+    int nentries;
+} uri_t;
+
 /*
  * Request
  */
@@ -95,6 +107,7 @@ typedef enum {
 } request_stage_t;
 
 typedef struct {
+    int resource_fd;
     method_t method;
     struct {
         int major;
@@ -109,15 +122,7 @@ typedef struct {
     string_t header_value;
     hash_t header_hash;
 
-    struct {
-        string_t scheme;
-        string_t host;
-        string_t port;
-        string_t abs_path;
-        string_t extension;
-        string_t query;
-        int state;
-    } uri;
+    uri_t uri;
 
     request_stage_t stage;
     int state;
@@ -127,14 +132,13 @@ typedef struct {
     buffer_t buffer;
 } request_t;
 
-
 /*
  * Response
  */
 
 typedef struct {
     int status;
-    response_headers_t headers;
+    //response_headers_t headers;
     buffer_t buffer;
 } response_t;
 

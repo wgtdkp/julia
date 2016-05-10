@@ -2,6 +2,7 @@
 #define _JULIA_BUFFER_H_
 
 #include "server.h"
+#include "string.h"
 #include "util.h"
 
 #include <memory.h>
@@ -48,5 +49,7 @@ static inline void buffer_discard_parsed(buffer_t* buffer)
 
 int buffer_read(int fd, buffer_t* buffer);
 bool buffer_has_eoh(buffer_t* buffer, int last_buffer_size);
+int buffer_append_string(buffer_t* buffer, const string_t* str);
+int buffer_print(buffer_t* buffer, const char* format, ...);
 
 #endif

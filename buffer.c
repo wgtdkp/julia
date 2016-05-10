@@ -1,7 +1,9 @@
 #include "buffer.h"
+#include "string.h"
 
 #include <assert.h>
 #include <errno.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -28,6 +30,26 @@ int buffer_read(int fd, buffer_t* buffer)
         buffer->end += len;
     } while (buffer->end < buffer->limit);  // We may have not read all data
     return readed;
+}
+
+int buffer_append_string(buffer_t* buffer, const string_t* str)
+{
+    int margin = buffer->limit - buffer->end;
+    int appended = min(margin, str->end - str->begin);
+    memcpy(buffer->end, str->begin, appended);
+    buffer->end += appended;
+    return appended;
+}
+
+int buffer_print(buffer_t* buffer, const char* format, ...)
+{
+    va_list args;
+    va_start (args, format);
+    int margin = buffer->limit - buffer->end;
+    int len = vsnprintf(buffer->end, margin, format, args);
+    buffer->end += len;
+    va_end (args);
+    return len;
 }
 
 // Detect the end of (request) header

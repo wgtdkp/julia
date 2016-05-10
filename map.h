@@ -6,7 +6,7 @@
 
 typedef unsigned int hash_t;
 
-void header_init(void);
+void register_request_headers(void);
 int header_offset(hash_t hash, string_t header);
 static inline hash_t header_hash(hash_t hash, int ch)
 {

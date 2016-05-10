@@ -8,7 +8,7 @@ OBJS_DIR = build/
 OBJS = $(SRCS:.c=.o)
 
 $(TARGET): $(OBJS)
-	$(CC) -o $@ $^
+	$(CC) -fno-common -o $@ $^
 
 %.o: %.c
 	$(CC) $(CFLAGS) -o $@ -c $<

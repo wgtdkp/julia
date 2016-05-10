@@ -9,4 +9,6 @@
 void response_init(response_t* response);
 void response_clear(response_t* response);
 
+void response_build_err(response_t* response, request_t* request, int err);
+
 #endif

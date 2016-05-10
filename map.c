@@ -54,7 +54,7 @@ static hash_t string_hash(string_t* str)
     return hash;
 }
 
-void header_init(void)
+void register_request_headers(void)
 {
     for (int i = 0; i < 2 * MAP_SIZE; i++) {
         header_slot_t* slot = &header_map[i];
@@ -69,8 +69,9 @@ void header_init(void)
         {                                               \
             string_t header = string_setto(#member);    \
             header_insert(string_hash(&header),         \
-            header, offsetof(headers, member));         \
+                    header, offsetof(headers, member)); \
         }
+
     PUT_HEADER(request_headers_t, cache_control);
     PUT_HEADER(request_headers_t, connection);
     PUT_HEADER(request_headers_t, date);
@@ -109,8 +110,9 @@ void header_init(void)
     PUT_HEADER(request_headers_t, referer);
     PUT_HEADER(request_headers_t, te);
     PUT_HEADER(request_headers_t, user_agent);
-}
 
+#   undef PUT_HEADER
+}
 
 int header_offset(hash_t hash, string_t header)
 {

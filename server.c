@@ -28,9 +28,10 @@
 
 #define DEBUG(msg)  fprintf(stderr, "%s\n", (msg));
 
+int doc_root_fd;
 
 static int startup(unsigned short port);
-static int server_init(void);
+static int server_init(const char* doc_root);
 
 int put_response(connection_t* connection);;
 
@@ -203,11 +204,15 @@ static int startup(unsigned short port)
     return listen_fd;
 }
 
-static int server_init(void)
+static int server_init(const char* doc_root)
 {
-    header_init();
+    register_request_headers();
     epoll_init();
     // TODO(wgtdkp): other initiations
+    
+    doc_root_fd = open(doc_root, O_RDWR);
+    EXIT_ON(doc_root_fd == -1, "open(doc_root)");
+    
     return OK;
 }
 
@@ -245,7 +250,7 @@ int main(int argc, char* argv[])
     printf("listening at port: %d\n", port);
     fflush(stdout);
 
-    server_init();
+    server_init(argv[2]);
     event_add_listen(&listen_fd);
     while (true) {
         int nfds = epoll_wait(epoll_fd, events, MAX_EVENT_NUM, 3000);
