@@ -12,12 +12,12 @@
 // Read data to buffer
 // Return: if haven't read eof, bytes readed; 
 //         else, 0 - readed;
-int buffer_read(int fd, buffer_t* buffer)
+int buffer_recv(buffer_t* buffer, int fd)
 {
     int readed = 0;
     do {
         int margin = buffer->limit - buffer->end;
-        int len = read(fd, buffer->end, margin);
+        int len = recv(fd, buffer->end, margin, 0);
         if (len == 0)   // EOF
             return -readed;
         if (len == -1) {
@@ -32,11 +32,28 @@ int buffer_read(int fd, buffer_t* buffer)
     return readed;
 }
 
-int buffer_append_string(buffer_t* buffer, const string_t* str)
+int buffer_send(buffer_t* buffer, int fd)
+{
+    int sent = 0;
+    do {
+        int len = send(fd, buffer->begin, buffer_size(buffer), 0);
+        if (len == -1) {
+            if (errno == EWOULDBLOCK)
+                break;
+            assert(0);
+            return ERR_INTERNAL_ERROR;
+        }
+        sent += len;
+        buffer->begin += len;
+    } while (buffer_size(buffer) != 0);
+    return sent;
+}
+
+int buffer_append_string(buffer_t* buffer, const string_t str)
 {
     int margin = buffer->limit - buffer->end;
-    int appended = min(margin, str->end - str->begin);
-    memcpy(buffer->end, str->begin, appended);
+    int appended = min(margin, str.end - str.begin);
+    memcpy(buffer->end, str.begin, appended);
     buffer->end += appended;
     return appended;
 }

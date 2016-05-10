@@ -28,7 +28,7 @@ struct {
 int epoll_fd;
 struct epoll_event events[MAX_EVENT_NUM];
 
-static void set_nonblocking(int fd);
+static int set_nonblocking(int fd);
 
 // TODO(wgtdkp): lock needed for multithreading
 // Return NULL if connections reaches MAX_CONCURRENT_NUM
@@ -56,6 +56,9 @@ connection_t* new_connection(int fd)
 
     // Initialization
     connection->fd = fd;
+    set_nonblocking(connection->fd);
+    connection->event.events = 0;
+    connection->event.data.ptr = connection;
     request_init(&connection->request);
     response_init(&connection->response);
     connection->nrequests = 0;
@@ -79,12 +82,6 @@ void connection_close(connection_t* connection)
     delete_connection(connection);
 }
 
-void epoll_init(void)
-{
-    epoll_fd = epoll_create1(0);
-    EXIT_ON(epoll_fd == -1, "epoll_createl");
-}
-
 void event_add_listen(int* listen_fd)
 {
     struct epoll_event ev;
@@ -96,41 +93,11 @@ void event_add_listen(int* listen_fd)
             "epoll_ctl: listen_fd");
 }
 
-void event_add(connection_t* connection, int event_flags)
-{
-    struct epoll_event ev;
-    set_nonblocking(connection->fd);
-    ev.events = event_flags;
-    
-    ev.data.ptr = connection;
-    EXIT_ON(epoll_ctl(epoll_fd, EPOLL_CTL_ADD, connection->fd, &ev) == -1,
-            "epoll_ctl: connection_fd");
-}
-
-void event_set_to(connection_t* connection, int new_event_flags)
-{
-    struct epoll_event ev;
-    set_nonblocking(connection->fd);
-    ev.events = new_event_flags;
-
-    ev.data.ptr = connection;
-    EXIT_ON(epoll_ctl(epoll_fd, EPOLL_CTL_MOD, connection->fd, &ev) == -1,
-            "epoll_ctl: connection_fd");
-}
-
-void event_delete(connection_t* connection, int event_flags)
-{
-    struct epoll_event ev;
-    ev.events = event_flags;
-
-    EXIT_ON(epoll_ctl(epoll_fd, EPOLL_CTL_DEL, connection->fd, &ev) == -1,
-            "epoll_ctl: event_fd");
-}
-
-static void set_nonblocking(int fd)
+static int set_nonblocking(int fd)
 {
     int flag = fcntl(fd, F_GETFL, 0);
     EXIT_ON(flag == -1, "fcntl: F_GETFL");
     flag |= O_NONBLOCK;
     EXIT_ON(fcntl(fd, F_SETFL, flag) == -1, "fcntl: FSETFL");
+    return 0;
 }

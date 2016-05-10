@@ -33,9 +33,6 @@ int doc_root_fd;
 static int startup(unsigned short port);
 static int server_init(const char* doc_root);
 
-int put_response(connection_t* connection);;
-
-
 static void send_test_response(connection_t* connection)
 {
     int fd = connection->fd;
@@ -47,7 +44,7 @@ static void send_test_response(connection_t* connection)
     int on = 1;
     setsockopt(fd, IPPROTO_TCP, TCP_CORK, &on, sizeof(on));
 
-    char buffer[1024]; 
+    char buffer[1024];
     sprintf(buffer, "HTTP/1.0 200 OK\r\n"
                    "Server: julia\r\n"
                    "Content-Type: text/html\r\n"
@@ -60,16 +57,6 @@ static void send_test_response(connection_t* connection)
     //delete_connection(connection);
     on = 0;
     setsockopt(fd, IPPROTO_TCP, TCP_CORK, &on, sizeof(on));
-}
-
-// TODO(wgtdkp): use sendfile() for static resource
-int put_response(connection_t* connection)
-{
-    assert(0);
-    send_test_response(connection);
-    //event_set_to(connection, EVENTS_IN);
-
-    return 0;
 }
 
 /*
@@ -207,10 +194,10 @@ static int startup(unsigned short port)
 static int server_init(const char* doc_root)
 {
     register_request_headers();
-    epoll_init();
-    // TODO(wgtdkp): other initiations
-    
-    doc_root_fd = open(doc_root, O_RDWR);
+    epoll_fd = epoll_create1(0);
+    EXIT_ON(epoll_fd == -1, "epoll_create1");
+
+    doc_root_fd = open(doc_root, O_RDONLY);
     EXIT_ON(doc_root_fd == -1, "open(doc_root)");
     
     return OK;
@@ -248,6 +235,7 @@ int main(int argc, char* argv[])
 
     printf("julia started...\n");
     printf("listening at port: %d\n", port);
+    printf("doc root: %s\n", argv[2]);
     fflush(stdout);
 
     server_init(argv[2]);
@@ -276,8 +264,6 @@ int main(int argc, char* argv[])
                     if (connection == NULL) {
                         close(connection_fd);
                         //break;    //???
-                    } else {
-                        event_add(connection, EVENTS_IN);
                     }
                 }
                 continue;

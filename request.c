@@ -71,7 +71,7 @@ int handle_request(connection_t* connection)
     buffer_t* buffer = &request->buffer;
     bool client_closed = false;
 
-    int readed = buffer_read(connection->fd, buffer);
+    int readed = buffer_recv(buffer, connection->fd);
     
     // Client closed the connection
     if (readed <= 0) {
@@ -90,11 +90,11 @@ int handle_request(connection_t* connection)
         err = request_process_body(request, response);
 
     if (client_closed) {
-        printf("connection closed\n");
+        printf("connection closed by the client side\n");
         fflush(stdout);
         connection_close(connection);
     }
-
+    
     // TODO(wgtdkp): request done, 
     // send response directly, until send buffer is full.
     
@@ -116,8 +116,8 @@ static int request_process_uri(request_t* request, response_t* response)
 {
     uri_t* uri = &request->uri;
     *uri->abs_path.end = 0;  // It is safe to do this
-    
-    int fd = openat(doc_root_fd, uri->abs_path.begin + 1, O_RDONLY);
+    const char* rel_path = uri->abs_path.begin + 1;
+    int fd = openat(doc_root_fd, rel_path, O_RDONLY);
     
     // Open the requested resource failed
     if (fd == -1) {
@@ -125,6 +125,7 @@ static int request_process_uri(request_t* request, response_t* response)
         return ERR_STATUS(response->status);
     }
     
+    request->resource_fd = fd;
     return OK;
 }
 

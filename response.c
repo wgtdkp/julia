@@ -8,7 +8,6 @@
 #include <strings.h>
 
 #define SERVER_NAME     "julia/0.1"
-#define ERR_PAGE(err)   err_#err_page
 
 
 // The key of (extension, mime-type) pair should be kept in lexicographical order.
@@ -99,6 +98,12 @@ static char err_406_page[] =
     "<body bgcolor=\"white\">" CRLF
     "<center><h1>406 Not Acceptable</h1></center>" CRLF;
 
+static char err_407_page[] =
+    "<html>" CRLF
+    "<head><title>407 Proxy Authentication Required</title></head>" CRLF
+    "<body bgcolor=\"white\">" CRLF
+    "<center><h1>407 Proxy Authentication Required</h1></center>" CRLF;
+
 static char err_408_page[] =
     "<html>" CRLF
     "<head><title>408 Request Time-out</title></head>" CRLF
@@ -153,6 +158,13 @@ static char err_416_page[] =
     "<body bgcolor=\"white\">" CRLF
     "<center><h1>416 Requested Range Not Satisfiable</h1></center>" CRLF;
 
+static char err_417_page[] =
+    "<html>" CRLF
+    "<head><title>417 Expectation Failed</title></head>" CRLF
+    "<body bgcolor=\"white\">" CRLF
+    "<center><h1>417 Expectation Failed</h1></center>" CRLF;
+
+/*    
 static char err_494_page[] =
     "<html>" CRLF
     "<head><title>400 Request Header Or Cookie Too Large</title></head>" CRLF
@@ -180,6 +192,7 @@ static char err_497_page[] =
     "<body bgcolor=\"white\">" CRLF
     "<center><h1>400 Bad Request</h1></center>" CRLF
     "<center>The plain HTTP request was sent to HTTPS port</center>" CRLF;
+*/
 
 static char err_500_page[] =
     "<html>" CRLF
@@ -217,6 +230,8 @@ static char err_507_page[] =
     "<body bgcolor=\"white\">" CRLF
     "<center><h1>507 Insufficient Storage</h1></center>" CRLF;
 
+
+static char* err_page(int status, int* len);
 static const char* status_repr(int status);
 
 /*
@@ -253,74 +268,128 @@ void response_clear(response_t* response)
     response_init(response);
 }
 
+// TODO(wgtdkp): use sendfile() for static resource
+int put_response(connection_t* connection)
+{
+    request_t* request = &connection->request;
+    response_t* response = &connection->response;
+    buffer_t* buffer = &response->buffer;
+    
+    assert(buffer_size(buffer) == 0);
+    
+    buffer_send(buffer, connection->fd);
+    
+    if (buffer_size(buffer) == 0) {
+        // All data has been sent
+        
+    }
+
+    return 0;
+}
+
 void response_build_err(response_t* response, request_t* request, int err)
 {
+    int appended = 0;
     buffer_t* buffer = &response->buffer;
     response->status = err;
 
+    // To make things simple
+    // We ensure that the buffer can contain those headers and body
     buffer_print(buffer, "HTTP/1.1 %3d %s" CRLF, response->status,
             status_repr(response->status));
-    buffer_print(buffer, "Server: %s" CRLF, SERVER_NAME);
-    if (request->keep_alive)
-        buffer_print(buffer, "Connection: keep-alive" CRLF);
-    else
-        buffer_print(buffer, "Connection: close" CRLF);
-    buffer_print(buffer, "Content-Type: text/html" CRLF);
-    buffer_print(buffer, "Content-Length: %d" CRLF, sizeof(ERR_PAGE(err)));
-    buffer_print(buffer, CRLF);
+    buffer_append_cstring(buffer, "Server: " SERVER_NAME CRLF);
+    if (request->keep_alive) {
+        buffer_append_cstring(buffer, "Connection: keep-alive" CRLF);
+    } else {
+        buffer_append_cstring(buffer, "Connection: close" CRLF);
+    }
+    buffer_append_cstring(buffer, "Content-Type: text/html" CRLF);
     
+    int page_len;
+    int page_tail_len = sizeof(err_page_tail) - 1;
+    char* page = err_page(response->status, &page_len);
+    if (page != NULL) {
+        buffer_print(buffer, "Content-Length: %d" CRLF,
+                page_len + page_tail_len);
+    }
     
+    appended = buffer_append_cstring(buffer, CRLF);
+    assert(appended == strlen(CRLF));
+    
+    if (page != NULL) {
+        buffer_append_string(buffer, string_settol(page, page_len));
+        appended = buffer_append_string(buffer,
+                string_settol(err_page_tail, page_tail_len));
+        assert(appended == page_tail_len);
+    }
 }
 
-static const int err_page(char** page)
+static char* err_page(int status, int* len)
 {
     switch(status) {
-    case 100: return "Continue";
-    case 101: return "Switching Protocols";
-    case 200: return "OK";
-    case 201: return "Created";
-    case 202: return "Accepted";
-    case 203: return "Non-Authoritative Information";
-    case 204: return "No Content";
-    case 205: return "Reset Content";
-    case 206: return "Partial Content";
-    case 300: return "Multiple Choices";
-    case 301: return "Moved Permanently";
-    case 302: return "Found";
-    case 303: return "See Other";
-    case 304: return "Not Modified";
-    case 305: return "Use Proxy";
-    case 307: return "Temporary Redirect";
-    case 400: return "Bad Request";
-    case 401: return "Unauthorized";
-    case 402: return "Payment Required";
-    case 403: return "Forbidden";
-    case 404: return "Not Found";
-    case 405: return "Method Not Allowed";
-    case 406: return "Not Acceptable";
-    case 407: return "Proxy Authentication Required";
-    case 408: return "Request Time-out";
-    case 409: return "Conflict";
-    case 410: return "Gone";
-    case 411: return "Length Required";
-    case 412: return "Precondition Failed";
-    case 413: return "Request Entity Too Large";
-    case 414: return "Request-URI Too Large";
-    case 415: return "Unsupported Media Type";
-    case 416: return "Requested range not satisfiable";
-    case 417: return "Expectation Failed";
-    case 500: return "Internal Server Error";
-    case 501: return "Not Implemented";
-    case 502: return "Bad Gateway";
-    case 503: return "Service Unavailable";
-    case 504: return "Gateway Time-out";
-    case 505: return "HTTP Version not supported";
-    default:  assert(0); return 0;
+    case 100:
+    case 101:
+    case 200:
+    case 201:
+    case 202:
+    case 203:
+    case 204:
+    case 205:
+    case 206:
+    case 300:
+        return NULL;
+    
+#   define ERR_CASE(err)                        \
+    case err:                                   \
+        *len = sizeof(err_##err##_page) - 1;    \
+        return err_##err##_page;    
+    
+    ERR_CASE(301)
+    ERR_CASE(302)
+    ERR_CASE(303)
+    case 304: 
+    case 305:
+        assert(0);
+        return NULL;
+    ERR_CASE(307)
+    ERR_CASE(400)
+    ERR_CASE(401)
+    ERR_CASE(402)
+    ERR_CASE(403)
+    ERR_CASE(404)
+    ERR_CASE(405)
+    ERR_CASE(406)
+    ERR_CASE(407)
+    ERR_CASE(408)
+    ERR_CASE(409)
+    ERR_CASE(410)
+    ERR_CASE(411)
+    ERR_CASE(412)
+    ERR_CASE(413)
+    ERR_CASE(414)
+    ERR_CASE(415)
+    ERR_CASE(416)
+    ERR_CASE(417)
+    ERR_CASE(500)
+    ERR_CASE(501)
+    ERR_CASE(502)
+    ERR_CASE(503)
+    ERR_CASE(504)
+    ERR_CASE(507)
+
+#   undef ERR_CASE 
+    default:
+        assert(0);
+        *len = 0; 
+        return NULL;
+    }
+    
+    return NULL;    // Make compiler happy
 }
 
 static const char* status_repr(int status)
 {
-    switch(status) {
+    switch (status) {
     case 100: return "Continue";
     case 101: return "Switching Protocols";
     case 200: return "OK";
@@ -361,6 +430,10 @@ static const char* status_repr(int status)
     case 503: return "Service Unavailable";
     case 504: return "Gateway Time-out";
     case 505: return "HTTP Version not supported";
-    default:  return " ";
+    default:
+        assert(0);  
+        return NULL;
     }
+    
+    return NULL;    // Make compile happy
 }

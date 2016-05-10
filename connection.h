@@ -139,7 +139,7 @@ typedef struct {
 typedef struct {
     int status;
     //response_headers_t headers;
-    buffer_t buffer;
+    buffer_t buffer; 
 } response_t;
 
 
@@ -149,6 +149,8 @@ typedef struct {
 
  typedef struct {
     int fd; // socket fd
+    struct epoll_event event;
+    
     request_t request;
     response_t response;
     int nrequests;  // # request during this connection
@@ -160,11 +162,6 @@ typedef struct {
 connection_t* new_connection(int fd);
 void delete_connection(connection_t* connection);
 void connection_close(connection_t* connection);
-
-void epoll_init(void);
 void event_add_listen(int* listen_fd);
-void event_add(connection_t* connection, int event_flags);
-void event_set_to(connection_t* connection, int new_event_flags);
-void event_delete(connection_t* connection, int event_flags);
 
 #endif
