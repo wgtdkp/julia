@@ -26,26 +26,6 @@ do {                        \
         return (err);       \
 } while (0)
 
-/*
-static const char token_tb[128] = {
-    0, 0, 0, 0, 0, 0, 0, 0, // 7
-    0, 0, 0, 0, 0, 0, 0, 0, // 15
-    0, 0, 0, 0, 0, 0, 0, 0, // 23
-    0, 0, 0, 0, 0, 0, 0, 0, // 31
-    0, 0, 0, 0, 0, 0, 0, 0, // 39
-    0, 0, 0, 0, 0, 0, 0, 0, // 47
-    0, 0, 0, 0, 0, 0, 0, 0, // 55
-    0, 0, 0, 0, 0, 0, 0, 0, // 63
-    0, 1, 1, 1, 1, 1, 1, 1, // 71
-    1, 1, 0, 0, 0, 0, 0, 0, // 79
-    0, 0, 0, 0, 0, 0, 0, 0, // 87
-    0, 0, 0, 0, 0, 0, 0, 0, // 95
-    0, 0, 0, 0, 0, 0, 0, 0, // 103
-    0, 0, 0, 0, 0, 0, 0, 0, // 111
-    0, 0, 0, 0, 0, 0, 0, 0, // 119
-    0, 0, 0, 0, 0, 0, 0, 0, // 127
-};
-*/
 
 // State machine: request line states
 enum {
@@ -672,7 +652,6 @@ static int parse_uri(request_t* request, char* p)
 int parse_header_line(request_t* request)
 {
     buffer_t* buffer = &request->buffer;
-    hash_t hash = 0;
     char* p;
     for (p = buffer->begin; p < buffer->end; p++) {
         char ch = *p;
@@ -685,7 +664,6 @@ int parse_header_line(request_t* request)
             case 'A' ... 'Z':
                 *p = *p - 'A' + 'a';
                 ch = *p;
-                hash = header_hash(0, ch);
                 request->header_name.begin = p;
                 request->state = HL_S_NAME;
                 break;
@@ -694,7 +672,6 @@ int parse_header_line(request_t* request)
                 ch = *p;
             case '0' ... '9':
             case 'a' ... 'z':
-                hash = header_hash(0, ch);
                 request->header_name.begin = p;
                 request->state = HL_S_NAME;
                 break;
@@ -723,7 +700,6 @@ int parse_header_line(request_t* request)
             case 'A' ... 'Z':
                 *p = *p - 'A' + 'a';
                 ch = *p;
-                hash = header_hash(hash, ch);
                 break;
             case '-':
                 // Convert '-' to '_'
@@ -733,7 +709,7 @@ int parse_header_line(request_t* request)
                 // Fall through
             case '0' ... '9':
             case 'a' ... 'z':
-                hash = header_hash(hash, ch);
+
                 break;
             case ':':
                 request->header_name.end = p;
@@ -822,7 +798,6 @@ int parse_header_line(request_t* request)
 header_done:
     // DEBUG:
     buffer->begin = p + 1;
-    request->header_hash = hash;
     request->state = HL_S_BEGIN;
     
     return request->header_name.begin == NULL ? EMPTY_LINE: OK;

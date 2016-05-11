@@ -7,7 +7,11 @@
 
 
 void response_init(response_t* response);
-void response_clear(response_t* response);
+static inline void response_clear(response_t* response)
+{
+    response_init(response);
+}
+
 int put_response(connection_t* connection);
 void response_build_err(response_t* response, request_t* request, int err);
 

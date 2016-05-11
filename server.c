@@ -33,6 +33,7 @@ int doc_root_fd;
 static int startup(unsigned short port);
 static int server_init(const char* doc_root);
 
+/*
 static void send_test_response(connection_t* connection)
 {
     int fd = connection->fd;
@@ -58,6 +59,7 @@ static void send_test_response(connection_t* connection)
     on = 0;
     setsockopt(fd, IPPROTO_TCP, TCP_CORK, &on, sizeof(on));
 }
+*/
 
 /*
 static int handle_cgi(int client, request_t* request)
@@ -193,7 +195,9 @@ static int startup(unsigned short port)
 
 static int server_init(const char* doc_root)
 {
-    register_request_headers();
+    header_map_init();
+    mime_map_init();
+    connection_pool_init();
     epoll_fd = epoll_create1(0);
     EXIT_ON(epoll_fd == -1, "epoll_create1");
 
@@ -238,8 +242,9 @@ int main(int argc, char* argv[])
     printf("doc root: %s\n", argv[2]);
     fflush(stdout);
 
+    add_listener(&listen_fd);
     server_init(argv[2]);
-    event_add_listen(&listen_fd);
+    
     while (true) {
         int nfds = epoll_wait(epoll_fd, events, MAX_EVENT_NUM, 3000);
         if (nfds == -1) {
@@ -251,10 +256,12 @@ int main(int argc, char* argv[])
         for (int i = 0; i < nfds; i++) {
             // Here is a hacking: 
             // Eeven if events[i].data is set to pointer of connection,
-            // we can get it's fd correctly(as 'fd' is the first member of struct connection_t).
+            // we can get it's fd correctly(as 'fd' is the first
+            // member of struct connection_t).
             int fd = *((int*)(events[i].data.ptr));
             if (fd == listen_fd) {
-                while (true) { // We could accept more than one connection per request
+                // We could accept more than one connection per request
+                while (true) {
                     int connection_fd = accept(fd, NULL, NULL);
                     if (connection_fd == -1) {
                         EXIT_ON((errno != EWOULDBLOCK), "accept");
@@ -263,7 +270,7 @@ int main(int argc, char* argv[])
                     connection_t* connection = new_connection(connection_fd);
                     if (connection == NULL) {
                         close(connection_fd);
-                        //break;    //???
+                        fprintf(stderr, "too many concurrent connection\n");
                     }
                 }
                 continue;

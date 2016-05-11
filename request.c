@@ -21,7 +21,7 @@ static int request_process_uri(request_t* request, response_t* response);
 static int request_process_request_line(request_t* request, response_t* response);
 static int request_process_headers(request_t* request, response_t* response);
 static int request_process_body(request_t* request, response_t* response);
-static void request_put_header(request_t* request);
+static void request_set_header(request_t* request);
 
 
 /*
@@ -41,7 +41,6 @@ void request_init(request_t* request)
     string_init(&request->request_line);
     string_init(&request->header_name);
     string_init(&request->header_value);
-    request->header_hash = 0;
     memset(&request->uri, 0, sizeof(request->uri));
 
     request->stage = RS_REQUEST_LINE;
@@ -55,6 +54,7 @@ void request_init(request_t* request)
 void request_release(request_t* request)
 {
     // TODO(wgtdkp): release dynamic allocated resource
+    // TODO(wgtdkp): ther won't by any dynamic allocated resource!!!
 }
 
 // Do not free dynamic allocated memory
@@ -65,7 +65,7 @@ void request_clear(request_t* request)
 
 int handle_request(connection_t* connection)
 {
-    int err = 0;
+    int err = OK;
     request_t* request = &connection->request;
     response_t* response = &connection->response;
     buffer_t* buffer = &request->buffer;
@@ -82,30 +82,48 @@ int handle_request(connection_t* connection)
     if (buffer_size(buffer) > 0)
         print_string("%*s", (string_t){buffer->begin, buffer->end});
 
-    if (err == 0 && request->stage == RS_REQUEST_LINE)
+    if (err == OK && request->stage == RS_REQUEST_LINE) {
         err = request_process_request_line(request, response);
-    if (err == 0 && request->stage == RS_HEADERS)
+        if (err != OK && err != AGAIN) {
+            goto send_response;
+        }
+    }
+    
+    if (err == OK && request->stage == RS_HEADERS) {
         err = request_process_headers(request, response);
-    if (err == 0 && request->stage == RS_BODY)
+        if (err != OK && err != AGAIN) {
+            goto send_response;
+        }
+    }
+    
+    if (err == OK && request->stage == RS_BODY) {
         err = request_process_body(request, response);
+        if (err != OK && err != AGAIN) {
+            goto send_response;   
+        }
+    }
 
     if (client_closed) {
         printf("connection closed by the client side\n");
         fflush(stdout);
         connection_close(connection);
     }
-    
+
     // TODO(wgtdkp): request done, 
     // send response directly, until send buffer is full.
-    
+send_response:
+    connection_block_request(connection);
+    put_response(connection);
     return OK;
 }
 
-static void request_put_header(request_t* request)
+static void request_set_header(request_t* request)
 {
-    int offset = header_offset(request->header_hash, request->header_name);
+    int offset = header_offset(request->header_name);
     if (offset < 0) {   // Can't recognize this header
         // TODO(wgtdkp): log it!
+        print_string("cannot recognize header: %*s",
+                request->header_name);
     } else {
         string_t* member = (string_t*)((void*)&request->headers + offset);
         *member = request->header_value;
@@ -125,15 +143,22 @@ static int request_process_uri(request_t* request, response_t* response)
         return ERR_STATUS(response->status);
     }
     
+    
     request->resource_fd = fd;
+    
     return OK;
 }
 
 static int request_process_request_line(request_t* request, response_t* response)
 {
     int err = parse_request_line(request);
-    if (err != OK)  // AGAIN or ERR
+    if (err == AGAIN) {
         return err;
+    } else if (err != OK) {
+        response->must_close = true;
+        response_build_err(response, request, 400);
+        return err;
+    }
     request->stage = RS_HEADERS;
 
     // TODO(wgtdkp): check method
@@ -154,7 +179,7 @@ static int request_process_headers(request_t* request, response_t* response)
             request->stage = RS_BODY;
             goto done;
         case OK:
-            request_put_header(request);
+            request_set_header(request);
             break; 
         default:
             assert(0);

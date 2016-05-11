@@ -22,6 +22,11 @@ static inline void buffer_init(buffer_t* buffer)
     buffer->limit = buffer->data + RECV_BUF_SIZE;
 }
 
+static inline void buffer_clear(buffer_t* buffer)
+{
+    buffer_init(buffer);
+}
+
 static inline int buffer_size(buffer_t* buffer)
 {
     return buffer->end - buffer->begin;

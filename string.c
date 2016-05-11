@@ -47,3 +47,21 @@ int string_cmp(string_t* lhs, string_t* rhs)
         return 0;
     return (pl == lhs->end) ? -1: 1;
 }
+
+bool string_eq(string_t* lhs, string_t* rhs)
+{
+    if (lhs->begin == NULL && rhs->begin == NULL)
+        return true;
+    if (lhs->begin == NULL || rhs->begin == NULL)
+        return false;
+    if (lhs->end - lhs->begin != rhs->end - rhs->begin)
+        return false;
+    char* pl = lhs->begin;
+    char* pr = rhs->begin;
+    for (; pl < lhs->end; pl++) {
+        if (*pl != *pr)
+            return false;
+        pr++;
+    }
+    return true;
+}

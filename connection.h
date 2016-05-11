@@ -120,7 +120,6 @@ typedef struct {
     string_t request_line;
     string_t header_name;
     string_t header_value;
-    hash_t header_hash;
 
     uri_t uri;
 
@@ -138,6 +137,13 @@ typedef struct {
 
 typedef struct {
     int status;
+    
+    // Connection must be closed after the response was sent.
+    // This happens when we accept a bad syntax request, and 
+    // cannot recover from this status. Because we immediately
+    // discard the request and we thus cannot decide the end
+    // of the bad request or the beginning of next request.
+    bool must_close;
     //response_headers_t headers;
     buffer_t buffer; 
 } response_t;
@@ -158,10 +164,11 @@ typedef struct {
     // TODO(wgtdkp): expire time
 } connection_t;
 
-
+void connection_pool_init(void);
 connection_t* new_connection(int fd);
-void delete_connection(connection_t* connection);
+int connection_block_request(connection_t* connection);
+int connection_block_response(connection_t* connection);
 void connection_close(connection_t* connection);
-void event_add_listen(int* listen_fd);
+int add_listener(int* listen_fd);
 
 #endif

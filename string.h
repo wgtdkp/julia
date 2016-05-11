@@ -1,6 +1,7 @@
 #ifndef _JULIA_STRING_H_
 #define _JULIA_STRING_H_
 
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -34,5 +35,6 @@ static inline string_t string_setto(char* cstr)
 
 int print_string(const char* format, ...);
 int string_cmp(string_t* lhs, string_t* rhs);
+bool string_eq(string_t* lhs, string_t* rhs);
 
 #endif

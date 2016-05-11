@@ -260,15 +260,12 @@ static const char* get_mime_type(const char* ext)
 
 void response_init(response_t* response)
 {
-
+    response->status = 200;
+    response->must_close = false;
+    buffer_init(&response->buffer);
 }
 
-void response_clear(response_t* response)
-{
-    response_init(response);
-}
-
-// TODO(wgtdkp): use sendfile() for static resource
+// Return: 1: response all sent; 0: partial sent;
 int put_response(connection_t* connection)
 {
     request_t* request = &connection->request;
@@ -278,12 +275,12 @@ int put_response(connection_t* connection)
     assert(buffer_size(buffer) == 0);
     
     buffer_send(buffer, connection->fd);
-    
-    if (buffer_size(buffer) == 0) {
-        // All data has been sent
-        
+    if (buffer_size(buffer) == 0) { // All data has been sent
+        connection_block_response(connection);
+        if (!request->keep_alive)
+            connection_close(connection);
+        return 1;
     }
-
     return 0;
 }
 
