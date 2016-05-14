@@ -9,26 +9,9 @@
 
 #define SERVER_NAME     "julia/0.1"
 
-
-// The key of (extension, mime-type) pair should be kept in lexicographical order.
-// As we will use simple binary search on this array to get the specifical mime-type.
-// A little more attention when add more (extension, mime-type) pairs.
-static const char* mime_map[][2] = {
-    {"css",     "text/css"},
-    {"htm",     "text/html"},
-    {"html",    "text/html"},
-    {"gif",     "image/gif"},
-    {"ico",     "image/x-icon"},
-    {"jpeg",    "image/jpeg"},
-    {"jpg",     "image/jpeg"},
-    {"svg",     "image/svg+xml"},
-    {"txt",     "text/plain"},
-    {"zip",     "application/zip"},
-};
-static const size_t mime_num = sizeof(mime_map) / sizeof(mime_map[0]);
-
 static char err_page_tail[] =
-    "<hr><center>" SERVER_NAME "</center>" CRLF
+    "<hr><center><span style='font-style: italic;'>"
+     SERVER_NAME "</span></center>" CRLF
     "</body>" CRLF
     "</html>" CRLF;
 
@@ -272,13 +255,15 @@ int put_response(connection_t* connection)
     response_t* response = &connection->response;
     buffer_t* buffer = &response->buffer;
     
-    assert(buffer_size(buffer) == 0);
+    //assert(buffer_size(buffer) == 0);
     
     buffer_send(buffer, connection->fd);
     if (buffer_size(buffer) == 0) { // All data has been sent
         connection_block_response(connection);
         if (!request->keep_alive)
             connection_close(connection);
+        response_clear(response);
+        request_clear(request);
         return 1;
     }
     return 0;

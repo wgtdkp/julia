@@ -594,7 +594,8 @@ static int parse_uri(request_t* request, char* p)
                 ++request->uri.nentries;
             ++request->uri.extension.begin;
             request->uri.extension.end = p;
-
+            
+            request->uri.abs_path.end = p;
             request->uri_state = URI_S_BEGIN;
             break;
         case '.':

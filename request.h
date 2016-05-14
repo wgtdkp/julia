@@ -4,9 +4,25 @@
 #include "connection.h"
 
 
+typedef int (*header_processor_t)(request_t* request, int offset);
+
+typedef struct {
+    int offset;
+    header_processor_t processor;
+} header_val_t;
+
+void header_map_init(void);
+void mime_map_init(void);
+
 void request_init(request_t* request);
 void request_release(request_t* request);
-void request_clear(request_t* request);
+
+static inline void request_clear(request_t* request)
+{
+    int tmp = request->keep_alive;
+    request_init(request);
+    request->keep_alive = tmp;
+}
 
 int handle_request(connection_t* connection);
 

@@ -2,12 +2,15 @@
 #define _JULIA_CONNECTION_H_
 
 #include "buffer.h"
-#include "map.h"
 #include "server.h"
 #include "string.h"
 
 #include <sys/epoll.h>
+#include <sys/stat.h>
 #include <stdbool.h> 
+
+extern int epoll_fd;
+extern struct epoll_event events[MAX_EVENT_NUM];
 
 
 #define COMMON_HEADERS              \
@@ -32,9 +35,6 @@
     string_t content_type;          \
     string_t expires;               \
     string_t last_modified;
-
-extern int epoll_fd;
-extern struct epoll_event events[MAX_EVENT_NUM];
 
 typedef struct {
     COMMON_HEADERS
@@ -100,18 +100,28 @@ typedef enum {
 } method_t;
 
 typedef enum {
-    RS_REQUEST_LINE = 0,
+    RS_REQUEST_LINE,
     RS_HEADERS,
     RS_BODY,
     DS_DONE,
 } request_stage_t;
 
+// Tranfer coding
+typedef enum {
+    TE_IDENTITY,
+    TE_CHUNKED,
+    TE_GZIP,
+    TE_COMPRESS,
+    TE_DEFLATE,
+} transfer_encoding_t;
+
 typedef struct {
     int resource_fd;
+    struct stat resource_stat;
     method_t method;
     struct {
-        int major;
-        int minor;
+        unsigned short major;
+        unsigned short minor;
     } version;
     request_headers_t headers;
     int status;
@@ -127,7 +137,7 @@ typedef struct {
     int state;
     int uri_state;
     bool keep_alive;
-
+    transfer_encoding_t t_encoding;
     buffer_t buffer;
 } request_t;
 

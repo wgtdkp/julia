@@ -97,8 +97,10 @@ static void connection_init(connection_t* connection, int fd)
 {
     connection->fd = fd;
     set_nonblocking(connection->fd);
+    connection->event.events = EVENTS_IN;
     connection->event.data.ptr = connection;
-    connection_block_response(connection);
+    assert(epoll_ctl(epoll_fd, EPOLL_CTL_ADD,
+            connection->fd, &connection->event) != -1);
     
     request_init(&connection->request);
     response_init(&connection->response);

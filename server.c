@@ -225,7 +225,8 @@ static int total_requests = 0;
 int main(int argc, char* argv[])
 {
     if (argc < 3) {
-        usage(); exit(-1);
+        usage();
+        exit(-1);
     }
 
     int listen_fd = -1;
@@ -237,14 +238,14 @@ int main(int argc, char* argv[])
         exit(-1);
     }
 
+    server_init(argv[2]);
+    
     printf("julia started...\n");
     printf("listening at port: %d\n", port);
     printf("doc root: %s\n", argv[2]);
     fflush(stdout);
 
-    add_listener(&listen_fd);
-    server_init(argv[2]);
-    
+    assert(add_listener(&listen_fd) != -1);
     while (true) {
         int nfds = epoll_wait(epoll_fd, events, MAX_EVENT_NUM, 3000);
         if (nfds == -1) {
