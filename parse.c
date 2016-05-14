@@ -804,9 +804,31 @@ header_done:
     return request->header_name.begin == NULL ? EMPTY_LINE: OK;
 }
 
-int parse_request_body(request_t* request)
+int parse_request_body_chunked(request_t* request)
 {
+    assert(0);
+    buffer_t* buffer = &request->buffer;
+    char* p;
+    for (p = buffer->begin; p < buffer->end; p++) {
+        char ch = *p;
+        switch (request->state) {
+            
+        }
+    }
+    
     return OK;
+}
+
+int parse_request_body_no_encoding(request_t* request)
+{
+    buffer_t* buffer = &request->buffer;
+    request->content_length -= buffer_size(buffer);
+    buffer_clear(buffer);
+    if (request->content_length == 0)
+        return OK;
+    else if (request->content_length > 0)
+        return AGAIN;
+    return ERR_INVALID_REQUEST;
 }
 
 /*

@@ -166,6 +166,7 @@ void request_init(request_t* request)
     request->uri_state = 0; // Meaningless
     request->keep_alive = false;
     request->t_encoding = TE_IDENTITY;
+    request->content_length = -1;
     
     buffer_init(&request->buffer);
 }
@@ -376,8 +377,35 @@ static int header_process_host(request_t* request, int offset)
 
 static int request_process_body(request_t* request, response_t* response)
 {
-    int err = parse_request_body(request);
+    buffer_t* buffer = &request->buffer;
+    if (buffer_size(buffer) == 0)
+        return OK;
+    int err = OK;
     
+    if (request->transfer_encoding == IDENTITY) {
+        if (request->content_length < 0) {
+            response_build_err(response, request, 400);
+            return ERR_STATUS(response->status);
+        }
+        err = parse_request_body_no_encoding(request);
+            
+    } else if (request->transfer_encoding == TE_CHUNKED)
+        err = parse_request_body_chunked(request);
+    
+    switch (err) {
+    case AGAIN:
+        return AGAIN;
+    case OK:
+        break;
+    default:
+        response_build_err(response, request, 400);
+        return ERR_STATUS(response->status);
+    }
+    
+    // Parse body done
     request->stage = RS_REQUEST_LINE;
-    return err;
+    
+    
+    
+    return OK;
 }

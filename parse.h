@@ -5,6 +5,7 @@
 
 int parse_request_line(request_t* request);
 int parse_header_line(request_t* request);
-int parse_request_body(request_t* request);;
+int parse_request_body_chunked(request_t* request);;
+int parse_request_body_no_encoding(request_t* request);
 
 #endif

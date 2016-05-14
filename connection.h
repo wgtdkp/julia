@@ -103,7 +103,6 @@ typedef enum {
     RS_REQUEST_LINE,
     RS_HEADERS,
     RS_BODY,
-    DS_DONE,
 } request_stage_t;
 
 // Tranfer coding
@@ -138,6 +137,8 @@ typedef struct {
     int uri_state;
     bool keep_alive;
     transfer_encoding_t t_encoding;
+    int content_length;
+    
     buffer_t buffer;
 } request_t;
 
