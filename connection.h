@@ -99,13 +99,6 @@ typedef enum {
     M_TRACE,
 } method_t;
 
-typedef enum {
-    RS_REQUEST_LINE,
-    RS_HEADERS,
-    RS_BODY,
-    DS_DONE,
-} request_stage_t;
-
 // Tranfer coding
 typedef enum {
     TE_IDENTITY,
@@ -133,7 +126,6 @@ typedef struct {
 
     uri_t uri;
 
-    request_stage_t stage;
     int state;
     int uri_state;
     bool keep_alive;

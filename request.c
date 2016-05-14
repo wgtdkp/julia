@@ -161,13 +161,22 @@ void request_init(request_t* request)
     string_init(&request->header_value);
     memset(&request->uri, 0, sizeof(request->uri));
 
-    request->stage = RS_REQUEST_LINE;
     request->state = 0; // RL_S_BEGIN
     request->uri_state = 0; // Meaningless
     request->keep_alive = false;
     request->t_encoding = TE_IDENTITY;
     
     buffer_init(&request->buffer);
+}
+
+void request_clear(request_t* request)
+{
+    if (request->resource_fd != -1)
+        close(request->resource_fd);
+
+    int tmp = request->keep_alive;
+    request_init(request);
+    request->keep_alive = tmp;
 }
 
 void request_release(request_t* request)
@@ -196,13 +205,13 @@ int handle_request(connection_t* connection)
     if (buffer_size(buffer) > 0)
         print_string("%*s", (string_t){buffer->begin, buffer->end});
 
-    if (err == OK && request->stage == RS_REQUEST_LINE)
+    if (err == OK)
         err = request_process_request_line(request, response);
     
-    if (err == OK && request->stage == RS_HEADERS)
+    if (err == OK)
         err = request_process_headers(request, response);
     
-    if (err == OK && request->stage == RS_BODY)
+    if (err == OK)
         err = request_process_body(request, response);
     
     if (err == AGAIN)
@@ -260,8 +269,7 @@ static int request_process_request_line(
         response_build_err(response, request, 400);
         return err;
     }
-    request->stage = RS_HEADERS;
-    
+
     // Supports only HTTP/1.1 and HTTP/1.0
     if (request->version.major != 1 || request->version.minor > 2) {
         response_build_err(response, request, 505);
@@ -289,7 +297,6 @@ static int request_process_headers(request_t* request, response_t* response)
         case AGAIN:
             return AGAIN;
         case EMPTY_LINE:
-            request->stage = RS_BODY;
             goto done;
         case OK:
             {
@@ -364,11 +371,9 @@ static int header_process_host(request_t* request, int offset)
     return 0;
 }
 
-
 static int request_process_body(request_t* request, response_t* response)
 {
     int err = parse_request_body(request);
-    
-    request->stage = RS_REQUEST_LINE;
+
     return err;
 }
