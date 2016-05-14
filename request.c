@@ -160,7 +160,8 @@ void request_init(request_t* request)
     string_init(&request->header_name);
     string_init(&request->header_value);
     memset(&request->uri, 0, sizeof(request->uri));
-
+    
+    request->stage = RS_REQUEST_LINE;
     request->state = 0; // RL_S_BEGIN
     request->uri_state = 0; // Meaningless
     request->keep_alive = false;
@@ -205,13 +206,13 @@ int handle_request(connection_t* connection)
     if (buffer_size(buffer) > 0)
         print_string("%*s", (string_t){buffer->begin, buffer->end});
 
-    if (err == OK)
+    if (err == OK && request->stage == RS_REQUEST_LINE)
         err = request_process_request_line(request, response);
     
-    if (err == OK)
+    if (err == OK && request->stage == RS_HEADERS)
         err = request_process_headers(request, response);
     
-    if (err == OK)
+    if (err == OK && request->stage == RS_BODY)
         err = request_process_body(request, response);
     
     if (err == AGAIN)
@@ -269,7 +270,8 @@ static int request_process_request_line(
         response_build_err(response, request, 400);
         return err;
     }
-
+    request->stage = RS_HEADERS;
+    
     // Supports only HTTP/1.1 and HTTP/1.0
     if (request->version.major != 1 || request->version.minor > 2) {
         response_build_err(response, request, 505);
@@ -318,6 +320,7 @@ static int request_process_headers(request_t* request, response_t* response)
         }
     }
 done:
+    request->stage = RS_BODY;
     // https://www.w3.org/Protocols/rfc2616/rfc2616-sec8.html
     // [14.23] Host
     if (request->version.minor == 1) {
@@ -374,6 +377,7 @@ static int header_process_host(request_t* request, int offset)
 static int request_process_body(request_t* request, response_t* response)
 {
     int err = parse_request_body(request);
-
+    
+    request->stage = RS_REQUEST_LINE;
     return err;
 }
