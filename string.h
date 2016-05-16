@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define STRING(cstr)    string_settol(cstr, sizeof(cstr) - 1)
+
 
 typedef struct {
     char* begin;
@@ -30,8 +32,6 @@ static inline string_t string_setto(char* cstr)
 {
     return string_settol(cstr, strlen(cstr));
 }
-
-
 
 int print_string(const char* format, ...);
 int string_cmp(string_t* lhs, string_t* rhs);

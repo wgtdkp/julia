@@ -28,6 +28,8 @@ static int header_process_connection(request_t* request, int offset);
 static int header_process_t_encoding(request_t* request, int offset);
 static int header_process_host(request_t* request, int offset);
 
+static int try_get_resource(request_t* request, response_t* response);
+
 
 typedef struct {
     char* name;
@@ -101,15 +103,15 @@ static map_t mime_map = {
 };
 
 static char* mime_tb [][2] = {
-    {"htm",     "text/html"},
-    {"html",    "text/html"},
-    {"gif",     "image/gif"},
-    {"ico",     "image/x-icon"},
-    {"jpeg",    "image/jpeg"},
-    {"jpg",     "image/jpeg"},
-    {"svg",     "image/svg+xml"},
-    {"txt",     "text/plain"},
-    {"zip",     "application/zip"},  
+    {("htm"),     ("text/html")},
+    {("html"),    ("text/html")},
+    {("gif"),     ("image/gif")},
+    {("ico"),     ("image/x-icon")},
+    {("jpeg"),    ("image/jpeg")},
+    {("jpg"),     ("image/jpeg")},
+    {("svg"),     ("image/svg+xml")},
+    {("txt"),     ("text/plain")},
+    {("zip"),     ("application/zip")},  
 };
 
 
@@ -212,19 +214,23 @@ int handle_request(connection_t* connection)
     
     if (err == OK && request->stage == RS_HEADERS)
         err = request_process_headers(request, response);
-    
+
     if (err == OK && request->stage == RS_BODY)
         err = request_process_body(request, response);
     
+    
     if (err == AGAIN)
         return err;
+    else if (err == OK) {
+        try_get_resource(request, response);
+    }
     // TODO(wgtdkp): request done, 
-    // send response directly, until send buffer is full.
+    
     connection_block_request(connection);
+    // Send response directly, until send buffer is full.
     put_response(connection);
     return OK;
 }
-
 
 static int request_process_uri(request_t* request, response_t* response)
 {
@@ -252,7 +258,7 @@ static int request_process_uri(request_t* request, response_t* response)
             return ERR_STATUS(response->status);
         }
         fstat(fd, &request->resource_stat);
-        uri->extension = string_settol("html", 4);
+        uri->extension = STRING("html");
     }
     
     request->resource_fd = fd;
@@ -279,6 +285,7 @@ static int request_process_request_line(
         return ERR_STATUS(response->status);
     }
     
+    // HTTP/1.1: persistent connection default
     if (request->version.minor == 1)
         request->keep_alive = 1;
     else
@@ -382,14 +389,14 @@ static int request_process_body(request_t* request, response_t* response)
         return OK;
     int err = OK;
     
-    if (request->transfer_encoding == IDENTITY) {
+    if (request->t_encoding == TE_IDENTITY) {
         if (request->content_length < 0) {
             response_build_err(response, request, 400);
             return ERR_STATUS(response->status);
         }
         err = parse_request_body_no_encoding(request);
             
-    } else if (request->transfer_encoding == TE_CHUNKED)
+    } else if (request->t_encoding == TE_CHUNKED)
         err = parse_request_body_chunked(request);
     
     switch (err) {
@@ -405,7 +412,12 @@ static int request_process_body(request_t* request, response_t* response)
     // Parse body done
     request->stage = RS_REQUEST_LINE;
     
-    
+
+    return OK;
+}
+
+static int try_get_resource(request_t* request, response_t* response)
+{
     
     return OK;
 }

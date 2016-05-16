@@ -7,7 +7,7 @@
 
 #include <sys/epoll.h>
 #include <sys/stat.h>
-#include <stdbool.h> 
+#include <stdbool.h>
 
 extern int epoll_fd;
 extern struct epoll_event events[MAX_EVENT_NUM];
@@ -126,19 +126,18 @@ typedef struct {
     int status;
 
     // For state machine
+    int state;
     string_t request_line;
     string_t header_name;
     string_t header_value;
-
+    int uri_state;
     uri_t uri;
 
     request_stage_t stage;
-    int state;
-    int uri_state;
     bool keep_alive;
     transfer_encoding_t t_encoding;
     int content_length;
-    
+
     buffer_t buffer;
 } request_t;
 
@@ -148,17 +147,29 @@ typedef struct {
 
 typedef struct {
     int status;
-    
+
     // Connection must be closed after the response was sent.
-    // This happens when we accept a bad syntax request, and 
+    // This happens when we accept a bad syntax request, and
     // cannot recover from this status. Because we immediately
     // discard the request and we thus cannot decide the end
     // of the bad request or the beginning of next request.
     bool must_close;
     //response_headers_t headers;
-    buffer_t buffer; 
+    buffer_t buffer;
 } response_t;
 
+/*
+typedef struct {
+    response_t* front;
+    response_t* back;  
+} response_queue_t;
+
+typedef struct {
+    
+    response_t* cur;
+    int allocated; 
+};
+*/
 
 /*
  * Connection
@@ -167,7 +178,7 @@ typedef struct {
  typedef struct {
     int fd; // socket fd
     struct epoll_event event;
-    
+
     request_t request;
     response_t response;
     int nrequests;  // # request during this connection
