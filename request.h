@@ -4,7 +4,8 @@
 #include "connection.h"
 
 
-typedef int (*header_processor_t)(request_t* request, int offset);
+typedef int (*header_processor_t)
+        (request_t* request, int offset, response_t* response);
 
 typedef struct {
     int offset;

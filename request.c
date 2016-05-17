@@ -20,13 +20,19 @@
 
 
 static int request_process_uri(request_t* request, response_t* response);
-static int request_process_request_line(request_t* request, response_t* response);
+static int request_process_request_line(
+            request_t* request, response_t* response);
 static int request_process_headers(request_t* request, response_t* response);
 static int request_process_body(request_t* request, response_t* response);
-static int header_process_generic(request_t* request, int offset);
-static int header_process_connection(request_t* request, int offset);
-static int header_process_t_encoding(request_t* request, int offset);
-static int header_process_host(request_t* request, int offset);
+
+static int header_process_generic(
+            request_t* request, int offset, response_t* response);
+static int header_process_connection(
+            request_t* request, int offset, response_t* response);
+static int header_process_t_encoding(
+            request_t* request, int offset, response_t* response);
+static int header_process_host(
+            request_t* request, int offset, response_t* response);
 
 static int try_get_resource(request_t* request, response_t* response);
 
@@ -137,7 +143,8 @@ void mime_map_init(void)
     }    
 }
 
-static int header_process_generic(request_t* request, int offset)
+static int header_process_generic(
+        request_t* request, int offset, response_t* response)
 {   
     string_t* member = (string_t*)((void*)&request->headers + offset);
     *member = request->header_value;
@@ -218,11 +225,11 @@ int handle_request(connection_t* connection)
     if (err == OK && request->stage == RS_BODY)
         err = request_process_body(request, response);
     
-    
     if (err == AGAIN)
         return err;
     else if (err == OK) {
         try_get_resource(request, response);
+        response_build(response, request);
     }
     // TODO(wgtdkp): request done, 
     
@@ -281,6 +288,7 @@ static int request_process_request_line(
     
     // Supports only HTTP/1.1 and HTTP/1.0
     if (request->version.major != 1 || request->version.minor > 2) {
+        response->must_close = true;
         response_build_err(response, request, 505);
         return ERR_STATUS(response->status);
     }
@@ -292,10 +300,11 @@ static int request_process_request_line(
         request->keep_alive = 0;
 
     // TODO(wgtdkp): check method
-        
-    err = request_process_uri(request, response);
-
-    return err;
+    
+    // We still need to receive the left part of this request
+    // Thus, the connection will hold
+    request_process_uri(request, response);
+    return OK;
 }
 
 static int request_process_headers(request_t* request, response_t* response)
@@ -315,11 +324,10 @@ static int request_process_headers(request_t* request, response_t* response)
                     break;
                 header_val_t header = slot->val.header;
                 if (header.offset != -1) {
-                    int err = header.processor(request, header.offset);
-                    if (err != 0) {
-                        response_build_err(response, request, err);
-                        return err;
-                    }
+                    int err = header.processor(request,
+                            header.offset, response);
+                    if (err != 0)
+                        return err; 
                 }
             }
             break; 
@@ -341,9 +349,10 @@ done:
     return OK;
 }
 
-static int header_process_connection(request_t* request, int offset)
+static int header_process_connection(
+        request_t* request, int offset, response_t* response)
 {
-    header_process_generic(request, offset);
+    header_process_generic(request, offset, response);
     request_headers_t* headers = &request->headers;
     if(strncasecmp("close", headers->connection.begin, 5) == 0)
         request->keep_alive = 0;
@@ -351,9 +360,10 @@ static int header_process_connection(request_t* request, int offset)
     return 0;
 }
 
-static int header_process_t_encoding(request_t* request, int offset)
+static int header_process_t_encoding(
+        request_t* request, int offset, response_t* response)
 {
-    header_process_generic(request, offset);
+    header_process_generic(request, offset, response);
     string_t* transfer_encoding = &request->headers.transfer_encoding;
     if (strncasecmp("chunked", transfer_encoding->begin, 7) == 0) {
         request->t_encoding = TE_CHUNKED;
@@ -369,16 +379,18 @@ static int header_process_t_encoding(request_t* request, int offset)
         request->t_encoding = TE_IDENTITY;
     } else {
         // Must close the connection as we can't understand the body
-        request->keep_alive = 0;
-        return ERR_STATUS(501);
+        response->must_close = true;
+        response_build_err(response, request, 415);
+        return ERR_STATUS(response->status);
     }
     
     return 0;
 }
 
-static int header_process_host(request_t* request, int offset)
+static int header_process_host(
+        request_t* request, int offset, response_t* response)
 {
-    header_process_generic(request, offset);
+    header_process_generic(request, offset, response);
     return 0;
 }
 
@@ -418,6 +430,6 @@ static int request_process_body(request_t* request, response_t* response)
 
 static int try_get_resource(request_t* request, response_t* response)
 {
-    
+
     return OK;
 }

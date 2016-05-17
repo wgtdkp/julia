@@ -13,6 +13,7 @@ static inline void response_clear(response_t* response)
 }
 
 int put_response(connection_t* connection);
+int response_build(response_t* response, request_t* request);
 void response_build_err(response_t* response, request_t* request, int err);
 
 #endif

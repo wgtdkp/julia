@@ -89,7 +89,7 @@ typedef struct {
  */
 
 typedef enum {
-    M_CONNECT = 0,
+    M_CONNECT,
     M_DELETE,
     M_GET,
     M_HEAD,
@@ -147,7 +147,7 @@ typedef struct {
 
 typedef struct {
     int status;
-
+    response_headers_t headers;
     // Connection must be closed after the response was sent.
     // This happens when we accept a bad syntax request, and
     // cannot recover from this status. Because we immediately

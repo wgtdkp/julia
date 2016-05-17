@@ -54,7 +54,6 @@ static inline void buffer_discard_parsed(buffer_t* buffer)
 
 int buffer_recv(buffer_t* buffer, int fd);
 int buffer_send(buffer_t* buffer, int fd);
-bool buffer_has_eoh(buffer_t* buffer, int last_buffer_size);
 int buffer_append_string(buffer_t* buffer, const string_t str);
 int buffer_print(buffer_t* buffer, const char* format, ...);
 

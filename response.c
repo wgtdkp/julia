@@ -6,6 +6,7 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <strings.h>
+#include <time.h>
 
 #define SERVER_NAME     "julia/0.1"
 
@@ -215,35 +216,15 @@ static char err_507_page[] =
 
 
 static char* err_page(int status, int* len);
-static const char* status_repr(int status);
-
-/*
-static const char* get_mime_type(const char* ext);;
-static const char* status_repr(int status);
-
-// Binary search to get corresponding mime-type,
-// return NULL when the extension is not supported.
-static const char* get_mime_type(const char* ext)
-{
-    int begin = 0, end = mime_num;
-    while (begin <= end) {
-        int mid = (end - begin) / 2 + begin;
-        int res = strcasecmp(ext, mime_map[mid][0]);
-        if (res == 0)
-            return mime_map[mid][1];
-        else if (res > 0)
-            begin = mid + 1;
-        else
-            end = mid - 1;
-    }
-    return NULL;
-}
-
-*/
+static const string_t status_repr(int status);
+static void response_put_status_line(response_t* response, request_t* request);
+static void response_put_date(response_t* response, struct tm* tm);
 
 void response_init(response_t* response)
 {
     response->status = 200;
+    memset(&response->headers, 0, sizeof(response->headers));
+    
     response->must_close = false;
     buffer_init(&response->buffer);
 }
@@ -269,6 +250,50 @@ int put_response(connection_t* connection)
     return 0;
 }
 
+int response_build(response_t* response, request_t* request)
+{
+    buffer_t* buffer = &response->buffer;
+    
+    response_put_status_line(response, request);
+    response_put_date(response, localtime(NULL));
+    buffer_append_cstring(buffer, "Server: " SERVER_NAME CRLF);
+    
+    // TODO(wgtdkp): scan headers to be sent
+           
+    return OK;
+}
+
+static void response_put_status_line(response_t* response, request_t* request)
+{
+    buffer_t* buffer = &response->buffer;
+    string_t version;
+    if (request->version.minor == 1)
+        version = STRING("HTTP/1.1 ");
+    else
+        version = STRING("HTTP/1.0 ");
+    
+    buffer_append_string(buffer, version);
+    buffer_append_string(buffer, status_repr(response->status));
+    buffer_append_cstring(buffer, CRLF);
+}
+
+static void response_put_date(response_t* response, struct tm* tm)
+{
+    buffer_t* buffer = &response->buffer;
+    static const char* week_tb[] = {
+        "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat",
+    };
+    
+    static const char* month_tb[] = {
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    };
+    
+    buffer_print(buffer, "Date: %.3s, %2d %.3s %4d %02d:%02d:%02d GMT" CRLF,
+            week_tb[tm->tm_wday], tm->tm_mday, month_tb[tm->tm_mon],
+            tm->tm_year, tm->tm_hour, tm->tm_min, tm->tm_sec);
+}
+
 void response_build_err(response_t* response, request_t* request, int err)
 {
     int appended = 0;
@@ -277,9 +302,11 @@ void response_build_err(response_t* response, request_t* request, int err)
 
     // To make things simple
     // We ensure that the buffer can contain those headers and body
-    buffer_print(buffer, "HTTP/1.1 %3d %s" CRLF, response->status,
-            status_repr(response->status));
+    response_put_status_line(response, request);
+    response_put_date(response, localtime(NULL));
     buffer_append_cstring(buffer, "Server: " SERVER_NAME CRLF);
+   
+   
     if (request->keep_alive) {
         buffer_append_cstring(buffer, "Connection: keep-alive" CRLF);
     } else {
@@ -308,6 +335,11 @@ void response_build_err(response_t* response, request_t* request, int err)
 
 static char* err_page(int status, int* len)
 {
+#   define ERR_CASE(err)                        \
+    case err:                                   \
+        *len = sizeof(err_##err##_page) - 1;    \
+        return err_##err##_page;    
+
     switch(status) {
     case 100:
     case 101:
@@ -320,12 +352,7 @@ static char* err_page(int status, int* len)
     case 206:
     case 300:
         return NULL;
-    
-#   define ERR_CASE(err)                        \
-    case err:                                   \
-        *len = sizeof(err_##err##_page) - 1;    \
-        return err_##err##_page;    
-    
+   
     ERR_CASE(301)
     ERR_CASE(302)
     ERR_CASE(303)
@@ -360,6 +387,7 @@ static char* err_page(int status, int* len)
     ERR_CASE(507)
 
 #   undef ERR_CASE 
+    
     default:
         assert(0);
         *len = 0; 
@@ -369,53 +397,53 @@ static char* err_page(int status, int* len)
     return NULL;    // Make compiler happy
 }
 
-static const char* status_repr(int status)
+static const string_t status_repr(int status)
 {
     switch (status) {
-    case 100: return "Continue";
-    case 101: return "Switching Protocols";
-    case 200: return "OK";
-    case 201: return "Created";
-    case 202: return "Accepted";
-    case 203: return "Non-Authoritative Information";
-    case 204: return "No Content";
-    case 205: return "Reset Content";
-    case 206: return "Partial Content";
-    case 300: return "Multiple Choices";
-    case 301: return "Moved Permanently";
-    case 302: return "Found";
-    case 303: return "See Other";
-    case 304: return "Not Modified";
-    case 305: return "Use Proxy";
-    case 307: return "Temporary Redirect";
-    case 400: return "Bad Request";
-    case 401: return "Unauthorized";
-    case 402: return "Payment Required";
-    case 403: return "Forbidden";
-    case 404: return "Not Found";
-    case 405: return "Method Not Allowed";
-    case 406: return "Not Acceptable";
-    case 407: return "Proxy Authentication Required";
-    case 408: return "Request Time-out";
-    case 409: return "Conflict";
-    case 410: return "Gone";
-    case 411: return "Length Required";
-    case 412: return "Precondition Failed";
-    case 413: return "Request Entity Too Large";
-    case 414: return "Request-URI Too Large";
-    case 415: return "Unsupported Media Type";
-    case 416: return "Requested range not satisfiable";
-    case 417: return "Expectation Failed";
-    case 500: return "Internal Server Error";
-    case 501: return "Not Implemented";
-    case 502: return "Bad Gateway";
-    case 503: return "Service Unavailable";
-    case 504: return "Gateway Time-out";
-    case 505: return "HTTP Version not supported";
+    case 100: return STRING("100 Continue");
+    case 101: return STRING("101 Switching Protocols");
+    case 200: return STRING("200 OK");
+    case 201: return STRING("201 Created");
+    case 202: return STRING("202 Accepted");
+    case 203: return STRING("203 Non-Authoritative Information");
+    case 204: return STRING("204 No Content");
+    case 205: return STRING("205 Reset Content");
+    case 206: return STRING("206 Partial Content");
+    case 300: return STRING("300 Multiple Choices");
+    case 301: return STRING("301 Moved Permanently");
+    case 302: return STRING("302 Found");
+    case 303: return STRING("303 See Other");
+    case 304: return STRING("304 Not Modified");
+    case 305: return STRING("305 Use Proxy");
+    case 307: return STRING("307 Temporary Redirect");
+    case 400: return STRING("400 Bad Request");
+    case 401: return STRING("401 Unauthorized");
+    case 402: return STRING("402 Payment Required");
+    case 403: return STRING("403 Forbidden");
+    case 404: return STRING("404 Not Found");
+    case 405: return STRING("405 Method Not Allowed");
+    case 406: return STRING("406 Not Acceptable");
+    case 407: return STRING("407 Proxy Authentication Required");
+    case 408: return STRING("408 Request Time-out");
+    case 409: return STRING("409 Conflict");
+    case 410: return STRING("410 Gone");
+    case 411: return STRING("411 Length Required");
+    case 412: return STRING("412 Precondition Failed");
+    case 413: return STRING("413 Request Entity Too Large");
+    case 414: return STRING("414 Request-URI Too Large");
+    case 415: return STRING("415 Unsupported Media Type");
+    case 416: return STRING("416 Requested range not satisfiable");
+    case 417: return STRING("417 Expectation Failed");
+    case 500: return STRING("500 Internal Server Error");
+    case 501: return STRING("501 Not Implemented");
+    case 502: return STRING("502 Bad Gateway");
+    case 503: return STRING("503 Service Unavailable");
+    case 504: return STRING("504 Gateway Time-out");
+    case 505: return STRING("505 HTTP Version not supported");
     default:
         assert(0);  
-        return NULL;
+        return string_null;
     }
     
-    return NULL;    // Make compile happy
+    return string_null;    // Make compile happy
 }

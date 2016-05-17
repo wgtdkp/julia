@@ -13,6 +13,8 @@ typedef struct {
     char* end;
 } string_t;
 
+static const string_t string_null = {NULL, NULL};
+
 static inline void string_init(string_t* str)
 {
     str->begin = NULL;
