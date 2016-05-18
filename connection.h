@@ -1,9 +1,10 @@
 #ifndef _JULIA_CONNECTION_H_
 #define _JULIA_CONNECTION_H_
 
-#include "buffer.h"
+#include "base/buffer.h"
+#include "base/string.h"
 #include "server.h"
-#include "string.h"
+
 
 #include <sys/epoll.h>
 #include <sys/stat.h>

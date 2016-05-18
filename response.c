@@ -1,5 +1,7 @@
 #include "response.h"
-#include "buffer.h"
+
+#include "base/buffer.h"
+
 #include "request.h"
 #include "util.h"
 

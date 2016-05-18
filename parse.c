@@ -3,10 +3,12 @@
  */
 
 #include "parse.h"
-#include "buffer.h"
-#include "map.h"
+
+#include "base/buffer.h"
+#include "base/map.h"
+#include "base/string.h"
+
 #include "request.h"
-#include "string.h"
 #include "util.h"
 
 #include <assert.h>

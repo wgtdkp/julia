@@ -1,10 +1,13 @@
+
 #include "request.h"
-#include "buffer.h"
-#include "map.h"
+
+#include "base/buffer.h"
+#include "base/map.h"
+#include "base/string.h"
+
 #include "parse.h"
 #include "response.h"
 #include "server.h"
-#include "string.h"
 #include "util.h"
 
 #include <assert.h>

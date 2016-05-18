@@ -4,6 +4,7 @@
 #define OK                  (0)
 #define AGAIN               (1)
 #define EMPTY_LINE          (2)
+#define ERROR               (-1)
 #define ERR_INVALID_REQUEST (-2)
 #define ERR_INVALID_METHOD  (-3)
 #define ERR_INVALID_VERSION (-4)
@@ -12,6 +13,8 @@
 #define ERR_INVALID_URI     (-7)
 
 #define ERR_UNSUPPORTED_VERSION (-8)
+
+#define ERR_NOMEM           (-9)
 
 #define ERR_STATUS(status)  (-status)
 
