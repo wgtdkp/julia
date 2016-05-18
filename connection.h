@@ -2,9 +2,10 @@
 #define _JULIA_CONNECTION_H_
 
 #include "base/buffer.h"
+#include "base/pool.h"
 #include "base/string.h"
-#include "server.h"
 
+#include "server.h"
 
 #include <sys/epoll.h>
 #include <sys/stat.h>
@@ -12,7 +13,7 @@
 
 extern int epoll_fd;
 extern struct epoll_event events[MAX_EVENT_NUM];
-
+extern pool_t connection_pool;
 
 #define COMMON_HEADERS              \
     /* General headers */           \
@@ -185,13 +186,14 @@ typedef struct {
     int nrequests;  // # request during this connection
 
     // TODO(wgtdkp): expire time
+    
+    pool_t* pool;
 } connection_t;
 
-void connection_pool_init(void);
-connection_t* new_connection(int fd);
+connection_t* open_connection(int fd, pool_t* pool);
+void close_connection(connection_t* connection);
 int connection_block_request(connection_t* connection);
 int connection_block_response(connection_t* connection);
-void connection_close(connection_t* connection);
 int add_listener(int* listen_fd);
 
 #endif

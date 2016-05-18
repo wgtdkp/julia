@@ -73,7 +73,10 @@ static int server_init(const char* doc_root)
 {
     header_map_init();
     mime_map_init();
-    connection_pool_init();
+    // Init pool with 256 connection
+    pool_init(&connection_pool, sizeof(connection_t), 256, 1);
+    
+    
     epoll_fd = epoll_create1(0);
     EXIT_ON(epoll_fd == -1, "epoll_create1");
 
@@ -135,7 +138,8 @@ int main(int argc, char* argv[])
                         EXIT_ON((errno != EWOULDBLOCK), "accept");
                         break;
                     }
-                    connection_t* connection = new_connection(connection_fd);
+                    connection_t* connection =
+                            open_connection(connection_fd, &connection_pool);
                     if (connection == NULL) {
                         close(connection_fd);
                         fprintf(stderr, "too many concurrent connection\n");

@@ -244,7 +244,7 @@ int put_response(connection_t* connection)
     if (buffer_size(buffer) == 0) { // All data has been sent
         connection_block_response(connection);
         if (!request->keep_alive)
-            connection_close(connection);
+            close_connection(connection);
         response_clear(response);
         request_clear(request);
         return 1;

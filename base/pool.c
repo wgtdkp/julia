@@ -33,8 +33,20 @@ int pool_init(pool_t* pool, int width, int chunk_size, int nchunks)
     pool->width = max(width, sizeof(chunk_slot_t));
     pool->chunk_size = chunk_size;
     pool->nallocated = 0;
+    pool->cur = NULL;
+    if (nchunks == 0)
+        return OK;
+
     int err = vector_init(&pool->chunks, sizeof(chunk_t), nchunks);
-    pool->cur = vector_at(&pool->chunks, 0);
+    for (int i = 0; i < nchunks; i++) {
+        chunk_t* chunk = vector_at(&pool->chunks, i);
+        err = chunk_init(chunk, pool->width, pool->chunk_size);
+        if (err != OK)
+            return err;
+    }
+
+    chunk_t* chunk =  vector_at(&pool->chunks, 0);
+    pool->cur = chunk->data;
     return err;
 }
 

@@ -212,7 +212,7 @@ int handle_request(connection_t* connection)
         readed = -readed;
         printf("connection closed by the client side\n");
         fflush(stdout);
-        connection_close(connection);
+        close_connection(connection);
         return OK;
     }
 
