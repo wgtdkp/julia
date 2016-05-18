@@ -24,7 +24,7 @@ static inline int list_init(list_t* list, pool_t* pool)
     list->size = 0;
     list->dummy.data = NULL;
     list->dummy.next = NULL;
-    list->dummy.prev = NULL;
+    list->dummy.prev = &list->dummy;    // The tail
     list->pool = pool;
     return OK;
 }
