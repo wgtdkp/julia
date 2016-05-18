@@ -1,8 +1,9 @@
-TARGET = client
+TARGET = test
 
 CC = gcc
-SRCS = client.c
-CFLAGS = -std=c11 -Wall -D_XOPEN_SOURCE -D_GNU_SOURCE 
+SRCS = test.c ../base/list.c ../base/vector.c ../base/pool.c ../util.c 
+INC = -I/usr/include -I../
+CFLAGS = -g -std=c11 -Wall -D_XOPEN_SOURCE -D_GNU_SOURCE $(INC)
 
 OBJS_DIR = build/
 OBJS = $(SRCS:.c=.o)

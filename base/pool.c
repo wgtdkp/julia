@@ -32,10 +32,11 @@ int pool_init(pool_t* pool, int width, int chunk_size, int nchunks)
     pool->chunk_size = chunk_size;
     pool->nallocated = 0;
     pool->cur = NULL;
-    if (nchunks == 0)
-        return OK;
-
+    
     int err = vector_init(&pool->chunks, nchunks);
+    if (nchunks == 0)
+        return err;
+
     for (int i = 0; i < nchunks; i++) {
         chunk_t* chunk = (chunk_t*)&pool->chunks.data[i];
         err = chunk_init(chunk, pool->width, pool->chunk_size);

@@ -7,6 +7,7 @@
 #include <string.h>
 #include <stdint.h>
 
+
 int vector_init(vector_t* vec, int size)
 {
     if (size != 0) {
@@ -36,7 +37,7 @@ int vector_reserve(vector_t* vec, int c)
 int vector_resize(vector_t* vec, int new_size)
 {
     if (new_size > vec->capacity) {
-        int new_capacity = vec->capacity * 2 + 1;
+        int new_capacity = max(new_size, vec->capacity * 2 + 1);
         vec->data = realloc(vec->data, sizeof(void*) * new_capacity);
         if (vec->data == NULL)
             return ERROR;

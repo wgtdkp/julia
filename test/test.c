@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "base/list.h"
 #include "base/vector.h"
 #include "base/pool.h"
 
@@ -64,10 +65,45 @@ int test_pool(void)
     return 0;
 }
 
+int test_list(void)
+{
+    pool_t pool;
+    pool_init(&pool, sizeof(list_node_t), 100, 0);
+    list_t list;
+    list_init(&list, &pool);
+    
+    for (int i = 0; i < 101; i++) {
+        arr[i] = i;
+    }
+  
+    for (int i = 0; i < 101; i++) {
+        list_insert(&list, &list.dummy, &arr[i]);
+    }
+
+
+    list_node_t* p = list.dummy.next;
+    for (int i = 0; i < list.size; i++) {
+        int* ele = p->data;
+        printf("list[%d]: %d\n", i, *ele);
+        p = p->next;
+    }
+    
+    printf("list size: %d\n", list.size);
+    printf("pool allocated: %d\n", pool.nallocated);
+     
+    list_clear(&list);
+    
+    printf("list size: %d\n", list.size);
+    printf("pool allocated: %d\n", pool.nallocated);
+
+    return 0;
+}
+
 
 int main(void)
 {
     //test_vector();
-    test_pool();
+    //test_pool();
+    test_list();
     return 0;
 }
