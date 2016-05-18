@@ -10,7 +10,6 @@ typedef union {
 } chunk_slot_t;
 
 typedef struct {
-    int width;
     void* data;
 } chunk_t;
 

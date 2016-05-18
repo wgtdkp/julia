@@ -5,29 +5,35 @@
 #include "base/vector.h"
 #include "base/pool.h"
 
+int arr[101];
+
 int test_vector(void)
 {
-    vector_t vec;
-    vector_init(&vec, sizeof(int), 0);
-    for (int i = 0; i < 100; i++)
-        vector_push(&vec, &i);
-    for (int i = 0; i < vec.size; i++) {
-        int* ele = vector_at(&vec, i);
-        printf("%d ", *ele);
+    for (int i = 0; i < 101; i++) {
+        arr[i] = i;
     }
-    printf("\nvector size: %d\n", vec.size);
-    vector_resize(&vec, 88);
-    printf("size: %d capacity: %d\n", vec.size, vec.capacity);
-    vector_resize(&vec, 180);
-    printf("size: %d capacity: %d\n", vec.size, vec.capacity);
+    
+    vector_t vec;
+    vector_init(&vec, 6);
+    for (int i = 0; i < vec.size; i++) {
+        vec.data[i] = &arr[i];
+        printf("vec[%d]: %d\n", i, *(int*)vec.data[i]);
+    }
+    printf("vec.size: %d\n", vec.size);
+    printf("vec.capacity: %d\n", vec.capacity);
+    
     vector_clear(&vec);
-    printf("size: %d capacity: %d\n", vec.size, vec.capacity);
-    //while (vec.size > 0) {
-    //    int* back = vector_back(&vec);
-    //    printf("vector back: %d\n", *back);
-    //    assert(back == vector_pop(&vec));
-    //}
-
+    for (int i = 0; i < 101; i++) {
+        vector_push(&vec, &arr[i]);
+        printf("vec[%d]: %d\n", i, *(int*)vec.data[i]);
+    }
+    
+    while (vec.size > 0) {
+        printf("back: %d\n", *(int*)vector_pop(&vec));
+    }
+    printf("vec.size: %d\n", vec.size);
+    printf("vec.capacity: %d\n", vec.capacity);
+       
     return 0;
 }
 
@@ -35,29 +41,25 @@ int test_pool(void)
 {
     pool_t pool;
     vector_t vec;
-    vector_init(&vec, sizeof(int*), 0);
-    pool_init(&pool, sizeof(int), 100, 1);
+    vector_init(&vec, 0);
+    pool_init(&pool, sizeof(int), 101, 1);
+    
     for (int i = 0; i < 101; i++) {
         int* ele = pool_alloc(&pool);
-        printf("cur: %p\n", pool.cur);
         *ele = i;
-        vector_push(&vec, &ele);
+        vector_push(&vec, ele);
     }
-    printf("chunk number: %d\n", pool.chunks.size);
-    printf("allocated: %d\n", pool.nallocated);
     
-    for (int i = 0; i < 101; i++) {
-        int* ele = *(int**)vector_at(&vec, i);
+    printf("pool.nallocated: %d\n", pool.nallocated);
+    printf("chunck number: %d\n", pool.chunks.size);
+    while (vec.size > 0) {
+        int* ele = vector_pop(&vec);
+        printf("back: %d\n", *ele);
         pool_free(&pool, ele);
-        printf("cur: %p\n", pool.cur);
     }
     
-    printf("chunk number: %d\n", pool.chunks.size);
-    printf("allocated: %d\n", pool.nallocated);
-    
-    pool_clear(&pool); 
-    printf("chunk number: %d\n", pool.chunks.size);
-    printf("allocated: %d\n", pool.nallocated);
+    printf("pool.nallocated: %d\n", pool.nallocated);
+    printf("chunck number: %d\n", pool.chunks.size);
 
     return 0;
 }
