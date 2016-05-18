@@ -220,7 +220,7 @@ static char err_507_page[] =
 static char* err_page(int status, int* len);
 static const string_t status_repr(int status);
 static void response_put_status_line(response_t* response, request_t* request);
-static void response_put_date(response_t* response, struct tm* tm);
+static void response_put_date(response_t* response);
 
 void response_init(response_t* response)
 {
@@ -257,7 +257,7 @@ int response_build(response_t* response, request_t* request)
     buffer_t* buffer = &response->buffer;
     
     response_put_status_line(response, request);
-    response_put_date(response, localtime(NULL));
+    response_put_date(response);
     buffer_append_cstring(buffer, "Server: " SERVER_NAME CRLF);
     
     // TODO(wgtdkp): scan headers to be sent
@@ -279,9 +279,13 @@ static void response_put_status_line(response_t* response, request_t* request)
     buffer_append_cstring(buffer, CRLF);
 }
 
-static void response_put_date(response_t* response, struct tm* tm)
+static void response_put_date(response_t* response)
 {
     buffer_t* buffer = &response->buffer;
+    
+    time_t t = time(NULL);
+    struct tm* tm = localtime(&t);
+    
     static const char* week_tb[] = {
         "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat",
     };
@@ -305,7 +309,7 @@ void response_build_err(response_t* response, request_t* request, int err)
     // To make things simple
     // We ensure that the buffer can contain those headers and body
     response_put_status_line(response, request);
-    response_put_date(response, localtime(NULL));
+    response_put_date(response);
     buffer_append_cstring(buffer, "Server: " SERVER_NAME CRLF);
    
    
