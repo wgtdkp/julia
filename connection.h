@@ -159,6 +159,7 @@ typedef struct {
     bool must_close;
     //response_headers_t headers;
     buffer_t buffer;
+
 } response_t;
 
 /*
@@ -183,18 +184,49 @@ typedef struct {
     struct epoll_event event;
 
     request_t request;
-    response_t response;
+    
+    pool_t response_pool;
+    pool_t queue_pool;
+    queue_t response_queue;
+    //response_t response;
     int nrequests;  // # request during this connection
 
     // TODO(wgtdkp): expire time
-    
+
     pool_t* pool;
 } connection_t;
 
 connection_t* open_connection(int fd, pool_t* pool);
 void close_connection(connection_t* connection);
-int connection_block_request(connection_t* connection);
-int connection_block_response(connection_t* connection);
 int add_listener(int* listen_fd);
+
+
+static inline int connection_disable_in(connection_t* connection)
+{
+    connection->event.events &= ~EVENTS_IN;
+    return epoll_ctl(epoll_fd, EPOLL_CTL_MOD,
+            connection->fd, &connection->event);
+}
+
+static inline int connection_enable_in(connection_t* connection)
+{
+    connection->event.events |= EVENTS_IN;
+    return epoll_ctl(epoll_fd, EPOLL_CTL_MOD,
+            connection->fd, &connection->event);
+}
+
+static inline int connection_disable_out(connection_t* connection)
+{
+    connection->event.events &= ~EVENTS_OUT;
+    return epoll_ctl(epoll_fd, EPOLL_CTL_MOD,
+            connection->fd, &connection->event);
+}
+
+static inline int connection_enable_out(connection_t* connection)
+{
+    connection->event.events |= EVENTS_OUT;
+    return epoll_ctl(epoll_fd, EPOLL_CTL_MOD,
+            connection->fd, &connection->event);
+} 
 
 #endif

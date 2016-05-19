@@ -221,6 +221,7 @@ static char* err_page(int status, int* len);
 static const string_t status_repr(int status);
 static void response_put_status_line(response_t* response, request_t* request);
 static void response_put_date(response_t* response);
+static int put_response(int fd, response_t* response);
 
 void response_init(response_t* response)
 {
@@ -231,25 +232,45 @@ void response_init(response_t* response)
     buffer_init(&response->buffer);
 }
 
-// Return: 1: response all sent; 0: partial sent;
-int put_response(connection_t* connection)
+int handle_response(connection_t* connection)
 {
-    request_t* request = &connection->request;
-    response_t* response = &connection->response;
-    buffer_t* buffer = &response->buffer;
-    
-    //assert(buffer_size(buffer) == 0);
-    
-    buffer_send(buffer, connection->fd);
-    if (buffer_size(buffer) == 0) { // All data has been sent
-        connection_block_response(connection);
-        if (!request->keep_alive)
+    while (1) {
+        response_t* response = queue_front(&connection->response_queue);
+        if (response == NULL) {
+            connection_disable_out(connection);
+            return OK;
+        }
+        
+        int close = response->must_close;
+        if (put_response(connection->fd, response) == AGAIN) {
+            // Response(s) not completely sent
+            // Open EPOLLOUT event
+            connection_enable_out(connection);
+            return AGAIN;
+        }
+        
+        queue_pop(&connection->response_queue);
+        pool_free(&connection->response_pool, response);
+        if (close) {
+            // TODO(wgtdkp): set linger ?
             close_connection(connection);
-        response_clear(response);
-        request_clear(request);
-        return 1;
+            return CLOSED;
+        }
     }
-    return 0;
+
+    return OK;  // Make compiler happy
+}
+
+static int put_response(int fd, response_t* response)
+{
+    buffer_t* buffer = &response->buffer;
+
+    buffer_send(buffer, fd);
+    if (buffer_size(buffer) == 0) { // All data has been sent
+        response_clear(response);
+        return OK;
+    }
+    return AGAIN;
 }
 
 int response_build(response_t* response, request_t* request)

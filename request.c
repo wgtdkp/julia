@@ -203,9 +203,10 @@ int handle_request(connection_t* connection)
 {
     int err = OK;
     request_t* request = &connection->request;
-    response_t* response = &connection->response;
-    buffer_t* buffer = &request->buffer;
-
+    buffer_t* buffer = &request->buffer;;
+    response_t* response = pool_alloc(&connection->response_pool);
+    response_init(response);
+    
     int readed = buffer_recv(buffer, connection->fd);
     // Client closed the connection
     if (readed <= 0) {
@@ -235,11 +236,14 @@ int handle_request(connection_t* connection)
         response_build(response, request);
     }
     // TODO(wgtdkp): request done, 
+    request_clear(request);
     
-    connection_block_request(connection);
-    // Send response directly, until send buffer is full.
-    put_response(connection);
-    return OK;
+    queue_push(&connection->response_queue, response);
+    
+    // Send response(s) directly, until send buffer is full.
+    err = handle_response(connection);
+    
+    return err;
 }
 
 static int request_process_uri(request_t* request, response_t* response)

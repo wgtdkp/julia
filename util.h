@@ -4,6 +4,7 @@
 #define OK                  (0)
 #define AGAIN               (1)
 #define EMPTY_LINE          (2)
+#define CLOSED              (3)
 #define ERROR               (-1)
 #define ERR_INVALID_REQUEST (-2)
 #define ERR_INVALID_METHOD  (-3)

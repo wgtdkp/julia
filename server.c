@@ -156,7 +156,7 @@ int main(int argc, char* argv[])
             if (events[i].events & EPOLLOUT) {
                 // Send response
                 connection_t* connection = (connection_t*)(events[i].data.ptr);
-                put_response(connection);
+                handle_response(connection);
             }
         }
     }
