@@ -3,8 +3,9 @@
 #include <stdlib.h>
 
 #include "base/list.h"
-#include "base/vector.h"
 #include "base/pool.h"
+#include "base/queue.h"
+#include "base/vector.h"
 
 int arr[101];
 
@@ -81,21 +82,59 @@ int test_list(void)
     }
 
 
-    list_node_t* p = list.dummy.next;
-    for (int i = 0; i < list.size; i++) {
+    list_node_t* p;
+    for (p = list_head(&list); p != NULL; p = p->next) {
         int* ele = p->data;
-        printf("list[%d]: %d\n", i, *ele);
-        p = p->next;
+        printf("list ele: %d\n", *ele);
     }
     
     printf("list size: %d\n", list.size);
     printf("pool allocated: %d\n", pool.nallocated);
-     
+    
+    list_delete(&list, list_head(&list)->next->next);
+    list_delete(&list, list_tail(&list)->prev->prev);
+    
+    for (p = list_head(&list); p != NULL; p = p->next) {
+        int* ele = p->data;
+        printf("list ele: %d\n", *ele);
+    }
+    
+    //while (list_head(&list) != NULL) {
+    //    printf("%d \n", *(int*)list_tail(&list)->data);
+    //    list_delete(&list, list_tail(&list));
+    //}
+    
     list_clear(&list);
     
     printf("list size: %d\n", list.size);
     printf("pool allocated: %d\n", pool.nallocated);
+    printf("list head: %p \n", list_head(&list));
+    printf("list tail: %p \n", list_tail(&list));
+    return 0;
+}
 
+int test_queue(void)
+{
+    pool_t pool;
+    pool_init(&pool, sizeof(list_node_t), 100, 0);
+    queue_t queue;
+    queue_init(&queue, &pool);
+    
+    for (int i = 0; i < 101; i++) {
+        arr[i] = i;
+    }
+    
+    for (int i = 0; i < 101; i++) {
+        queue_push(&queue, &arr[i]);
+    }
+    
+    while (!queue_empty(&queue)) {
+        int* ele = queue_pop(&queue);
+        printf("ele: %d\n", *ele);
+    }
+    
+    printf("queue size: %d\n", queue_size(&queue));
+    
     return 0;
 }
 
@@ -104,6 +143,7 @@ int main(void)
 {
     //test_vector();
     //test_pool();
-    test_list();
+    //test_list();
+    test_queue();
     return 0;
 }

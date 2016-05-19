@@ -3,6 +3,7 @@
 
 #include "base/buffer.h"
 #include "base/pool.h"
+#include "base/queue.h"
 #include "base/string.h"
 
 #include "server.h"
