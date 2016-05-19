@@ -4,6 +4,8 @@
 #include "list.h"
 #include "pool.h"
 
+typedef list_node_t queue_node_t;
+
 typedef struct {
     list_t container;
 } queue_t;
@@ -58,7 +60,7 @@ static inline void* queue_back(queue_t* queue)
 {
     list_t* list = &queue->container;
     list_node_t* tail = list_tail(list);
-    if (tail == NULL)
+    if (tail == &list->dummy)
         return NULL;
     return tail->data;
 }

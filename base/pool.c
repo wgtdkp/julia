@@ -72,7 +72,7 @@ void* pool_alloc(pool_t* pool)
 void pool_clear(pool_t* pool)
 {
     for (int i = 0; i < pool->chunks.size; i++)
-        chunk_clear(pool->chunks.data[i]);
+        chunk_clear((chunk_t*)&pool->chunks.data[i]);
     vector_clear(&pool->chunks);
     
     pool->cur = NULL;
