@@ -63,6 +63,7 @@ int test_pool(void)
     printf("pool.nallocated: %d\n", pool.nallocated);
     printf("chunck number: %d\n", pool.chunks.size);
 
+    pool_clear(&pool);
     return 0;
 }
 
@@ -110,6 +111,8 @@ int test_list(void)
     printf("pool allocated: %d\n", pool.nallocated);
     printf("list head: %p \n", list_head(&list));
     printf("list tail: %p \n", list_tail(&list));
+    
+    pool_clear(&pool);
     return 0;
 }
 
@@ -142,8 +145,8 @@ int test_queue(void)
 int main(void)
 {
     //test_vector();
-    //test_pool();
+    test_pool();
     //test_list();
-    test_queue();
+    //test_queue();
     return 0;
 }

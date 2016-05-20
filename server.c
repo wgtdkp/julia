@@ -7,26 +7,31 @@
 #include "response.h"
 #include "util.h"
 
+#include <assert.h>
+#include <ctype.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <pthread.h>
+#include <sched.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/epoll.h>
-#include <sys/mman.h>
-#include <sys/socket.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <fcntl.h>
-#include <sys/wait.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <arpa/inet.h>
-#include <errno.h>
-#include <pthread.h>
-#include <unistd.h>
-#include <ctype.h>
-#include <assert.h>
 #include <string.h>
 #include <strings.h>
 #include <time.h>
+#include <unistd.h>
+
+#include <sys/epoll.h>
+#include <sys/mman.h>
+#include <sys/resource.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+
 
 #define DEBUG(msg)  fprintf(stderr, "%s\n", (msg));
 
@@ -53,6 +58,11 @@ static int startup(unsigned short port)
 
     int on = 1;
     setsockopt(listen_fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
+#ifdef REUSE_PORT
+    setsockopt(listen_fd, SOL_SOCKET, SO_REUSEPORT, &on, sizeof(on));
+#endif
+    
+
 
     memset((void*)&server_addr, 0, addr_len);
     server_addr.sin_family = AF_INET;
@@ -71,6 +81,11 @@ static int startup(unsigned short port)
 
 static int server_init(const char* doc_root)
 {
+    // Set limits
+    struct rlimit nofile_limit = {65535, 65535};
+    setrlimit(RLIMIT_NOFILE, &nofile_limit);
+    
+    
     header_map_init();
     mime_map_init();
     // Init pool with 256 connection
@@ -101,6 +116,31 @@ int main(int argc, char* argv[])
 
     int listen_fd = -1;
     unsigned short port = atoi(argv[1]);
+
+#ifdef REUSE_PORT
+#define NCORES  (8)
+    int workers[NCORES];
+    for (int i = 0; i < NCORES - 1; i++) {
+        int pid = fork();
+        if (pid == 0) {
+            goto worker;
+        } else {
+            workers[i] = pid;
+        }
+    }
+    workers[NCORES - 1] = getpid();
+    /*
+    cpu_set_t mask;
+    for (int i = 0; i < NCORES; i++) {
+        CPU_ZERO(&mask);
+        CPU_SET(i, &mask);
+        sched_setaffinity(workers[i], sizeof(cpu_set_t), &mask);
+        //sched_getaffinity(NCORES[i], sizeof(cpu_set_t), &mask);
+        
+    }
+    */
+worker:
+#endif
 
     listen_fd = startup(port);
     if (listen_fd < 0) {
@@ -135,6 +175,8 @@ int main(int argc, char* argv[])
                 while (true) {
                     int connection_fd = accept(fd, NULL, NULL);
                     if (connection_fd == -1) {
+                        // TODO(wgtdkp): handle this error
+                        // There could be too many connections(beyond OPEN_MAX)
                         EXIT_ON((errno != EWOULDBLOCK), "accept");
                         break;
                     }

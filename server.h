@@ -5,7 +5,7 @@
 #include <stdlib.h>
 
 #define MAX_CONCURRENT_NUM  (65536)
-#define MAX_EVENT_NUM   (256)
+#define MAX_EVENT_NUM   (65536)
 #define RECV_BUF_SIZE   (4 * 1024)
 #define SEND_BUF_SIZE   (4 * 1024)
 #define EVENTS_IN   (EPOLLIN | EPOLLET)

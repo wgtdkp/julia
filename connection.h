@@ -8,9 +8,11 @@
 
 #include "server.h"
 
+#include <stdbool.h>
+
 #include <sys/epoll.h>
 #include <sys/stat.h>
-#include <stdbool.h>
+
 
 extern int epoll_fd;
 extern struct epoll_event events[MAX_EVENT_NUM];
@@ -118,8 +120,6 @@ typedef enum {
 } transfer_encoding_t;
 
 typedef struct {
-    int resource_fd;
-    struct stat resource_stat;
     method_t method;
     struct {
         unsigned short major;
@@ -149,6 +149,8 @@ typedef struct {
  */
 
 typedef struct {
+    int resource_fd;
+    struct stat resource_stat;
     int status;
     response_headers_t headers;
     // Connection must be closed after the response was sent.

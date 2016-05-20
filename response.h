@@ -7,10 +7,7 @@
 
 
 void response_init(response_t* response);
-static inline void response_clear(response_t* response)
-{
-    response_init(response);
-}
+void response_clear(response_t* response);
 
 int handle_response(connection_t* connection);
 int response_build(response_t* response, request_t* request);

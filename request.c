@@ -160,8 +160,6 @@ static int header_process_generic(
 
 void request_init(request_t* request)
 {
-    request->status = 200;
-    request->resource_fd = -1;
     request->method = M_GET;    // Any value is ok
     request->version.major = 0;
     request->version.minor = 0;
@@ -185,9 +183,6 @@ void request_init(request_t* request)
 
 void request_clear(request_t* request)
 {
-    if (request->resource_fd != -1)
-        close(request->resource_fd);
-
     int tmp = request->keep_alive;
     request_init(request);
     request->keep_alive = tmp;
@@ -211,14 +206,14 @@ int handle_request(connection_t* connection)
     // Client closed the connection
     if (readed <= 0) {
         readed = -readed;
-        printf("connection closed by the client side\n");
-        fflush(stdout);
+        //printf("connection closed by the client side\n");
+        //fflush(stdout);
         close_connection(connection);
         return OK;
     }
 
-    if (buffer_size(buffer) > 0)
-        print_string("%*s", (string_t){buffer->begin, buffer->end});
+    //if (buffer_size(buffer) > 0)
+    //    print_string("%*s", (string_t){buffer->begin, buffer->end});
 
     if (err == OK && request->stage == RS_REQUEST_LINE)
         err = request_process_request_line(request, response);
@@ -263,7 +258,7 @@ static int request_process_uri(request_t* request, response_t* response)
         return ERR_STATUS(response->status);
     }
     
-    struct stat* stat = &request->resource_stat;
+    struct stat* stat = &response->resource_stat;
     fstat(fd, stat);
     if (S_ISDIR(stat->st_mode)) {
         fd = openat(fd, "index.html", O_RDONLY);
@@ -271,11 +266,11 @@ static int request_process_uri(request_t* request, response_t* response)
             response_build_err(response, request, 404);
             return ERR_STATUS(response->status);
         }
-        fstat(fd, &request->resource_stat);
+        fstat(fd, &response->resource_stat);
         uri->extension = STRING("html");
     }
     
-    request->resource_fd = fd;
+    response->resource_fd = fd;
     return OK;
 }
 
@@ -437,6 +432,5 @@ static int request_process_body(request_t* request, response_t* response)
 
 static int try_get_resource(request_t* request, response_t* response)
 {
-
     return OK;
 }

@@ -24,7 +24,7 @@ int buffer_recv(buffer_t* buffer, int fd)
         if (len == -1) {
             if (errno == EWOULDBLOCK)
                 break;
-            assert(0);
+            EXIT_ON(1, "recv");
             return ERR_INTERNAL_ERROR;
         }
         readed += len;
@@ -41,7 +41,7 @@ int buffer_send(buffer_t* buffer, int fd)
         if (len == -1) {
             if (errno == EWOULDBLOCK)
                 break;
-            assert(0);
+            EXIT_ON(1, "send");
             return ERR_INTERNAL_ERROR;
         }
         sent += len;

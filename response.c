@@ -6,9 +6,14 @@
 #include "util.h"
 
 #include <assert.h>
+#include <errno.h>
 #include <stdlib.h>
 #include <strings.h>
 #include <time.h>
+#include <unistd.h>
+
+#include <sys/sendfile.h>
+
 
 #define SERVER_NAME     "julia/0.1"
 
@@ -225,6 +230,8 @@ static int put_response(int fd, response_t* response);
 
 void response_init(response_t* response)
 {
+    response->resource_fd = -1;
+    
     response->status = 200;
     memset(&response->headers, 0, sizeof(response->headers));
     
@@ -232,8 +239,18 @@ void response_init(response_t* response)
     buffer_init(&response->buffer);
 }
 
+void response_clear(response_t* response)
+{
+    if (response->resource_fd != -1)
+        close(response->resource_fd);
+
+    response_init(response);
+}
+
 int handle_response(connection_t* connection)
 {
+    request_t* request = &connection->request;
+
     while (1) {
         response_t* response = queue_front(&connection->response_queue);
         if (response == NULL) {
@@ -251,7 +268,7 @@ int handle_response(connection_t* connection)
         
         queue_pop(&connection->response_queue);
         pool_free(&connection->response_pool, response);
-        if (close) {
+        if (close || !request->keep_alive) {
             // TODO(wgtdkp): set linger ?
             close_connection(connection);
             return CLOSED;
@@ -267,8 +284,20 @@ static int put_response(int fd, response_t* response)
 
     buffer_send(buffer, fd);
     if (buffer_size(buffer) == 0) { // All data has been sent
-        response_clear(response);
-        return OK;
+        // DEBUG: efficiency test
+        // Sendfile
+        while (1) {
+            int len = sendfile(fd, response->resource_fd, NULL,
+                    response->resource_stat.st_size);
+            if (len == 0) {
+                response_clear(response);
+                return OK;
+            } else if (len < 0) {
+                if (errno == EAGAIN)
+                    return AGAIN;
+                EXIT_ON(1, "sendfile");
+            }
+        }
     }
     return AGAIN;
 }
@@ -282,7 +311,14 @@ int response_build(response_t* response, request_t* request)
     buffer_append_cstring(buffer, "Server: " SERVER_NAME CRLF);
     
     // TODO(wgtdkp): scan headers to be sent
-           
+    
+    // DEBUG: efficiency test
+    buffer_append_cstring(buffer, "Content-Type: text/html" CRLF);
+    buffer_print(buffer, "Content-Length: %d" CRLF,
+                response->resource_stat.st_size);
+    buffer_append_cstring(buffer, CRLF);
+    
+    
     return OK;
 }
 
