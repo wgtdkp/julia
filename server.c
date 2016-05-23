@@ -41,13 +41,19 @@ static int startup(unsigned short port);
 static int server_init(const char* doc_root);
 static void usage(void);
 
+static void sig_int(int signo)
+{
+    // TODO(wgtdkp): print statistic info.
+    
+}
+
 static int startup(unsigned short port)
 {
-    // TODO(wgtdkp): try to understanding this func call!!!
-    // If the client closed the connection, then it will cause IGPIPE
+    // If the client closed the connection, then it will cause SIGPIPE
     // Here simplely ignore this SIG
     signal(SIGPIPE, SIG_IGN);
-
+    signal(SIPINT, sig_int);
+    
     int listen_fd = 0;
     struct sockaddr_in server_addr = {0};
     int addr_len = sizeof(server_addr);

@@ -22,7 +22,7 @@ int buffer_recv(buffer_t* buffer, int fd)
         if (len == 0)   // EOF
             return -readed;
         if (len == -1) {
-            if (errno == EWOULDBLOCK)
+            if (errno == EAGAIN)
                 break;
             EXIT_ON(1, "recv");
             return ERR_INTERNAL_ERROR;
@@ -39,8 +39,11 @@ int buffer_send(buffer_t* buffer, int fd)
     do {
         int len = send(fd, buffer->begin, buffer_size(buffer), 0);
         if (len == -1) {
-            if (errno == EWOULDBLOCK)
+            if (errno == EAGAIN)
                 break;
+            else if (errno == EPIPE) {
+                // TODO(wgtdkp): the connection is broken
+            }
             EXIT_ON(1, "send");
             return ERR_INTERNAL_ERROR;
         }
