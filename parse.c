@@ -14,6 +14,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <ctype.h>
 
 #define STR2_EQ(p, q)   ((p)[0] == (q)[0] && (p)[1] == (q)[1])
 #define STR3_EQ(p, q)   (STR2_EQ(p, q) && (p)[2] == (q)[2])
@@ -804,6 +805,63 @@ header_done:
     request->state = HL_S_BEGIN;
     
     return request->header_name.begin == NULL ? EMPTY_LINE: OK;
+}
+
+int parse_accept_value(request_t* request)
+{
+    /*
+    string_t* val = &request->header_value;
+    list* accept_list = &requets->accept_list;
+    
+    for (char* p = val->begin; p < val->end;) {
+        while (*p == ' ' && p != val->end) {
+            ++p;
+        }
+        if (p == val->end)
+            return OK;
+        list_node_t* type_node = list_alloc(accept_list);
+        accept_type_t* accept_type = &type_node->data;
+        accept_type->type.begin = p;
+        while (*p != '/' && p != val->end) {
+            ++p;
+        }
+        if (p == val->end)
+            return ERR_INVALID_HEADER;
+        accept_type->type.end = p;
+        
+        ++p;
+        accept_type->subtype.begin = p;
+        while (*p != ';' && *p != ',' && p != val->end) {
+            ++p;
+        }
+        //if (p == val->end)
+        //    return ERR_INVALID_HEADER;
+        accept_type->subtype.end = p;
+        if (*p == ',')
+            goto media_range;
+        
+    param:
+        ++p;
+        while (*p == ' ' && p != val->end) {
+            ++p;
+        }
+        // Other params are ignored
+        if (p[0] == 'q' && p[1] == '=' && p != val->end) {
+            accept_type->q = atof(p + 2);
+        } else {
+            accept_type = 1;
+        }
+        
+        while (*p != ';' && *p != ',' && p != val->end) {
+            ++p;
+        }
+        if (*p == ';')
+            goto param;
+    media_range:
+        list_insert(accept_list, list_tail(accept_list), type_node);
+    }
+*/    
+    return OK;
 }
 
 int parse_request_body_chunked(request_t* request)

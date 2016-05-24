@@ -24,18 +24,23 @@
 
 static int request_process_uri(request_t* request, response_t* response);
 static int request_process_request_line(
-            request_t* request, response_t* response);
+        request_t* request, response_t* response);
 static int request_process_headers(request_t* request, response_t* response);
 static int request_process_body(request_t* request, response_t* response);
 
 static int header_process_generic(
-            request_t* request, int offset, response_t* response);
+        request_t* request, int offset, response_t* response);
 static int header_process_connection(
-            request_t* request, int offset, response_t* response);
+        request_t* request, int offset, response_t* response);
 static int header_process_t_encoding(
-            request_t* request, int offset, response_t* response);
+        request_t* request, int offset, response_t* response);
 static int header_process_host(
-            request_t* request, int offset, response_t* response);
+        request_t* request, int offset, response_t* response);
+
+static int header_process_accept(
+        request_t* request, int offset, response_t* response);
+        
+
 
 static int try_get_resource(request_t* request, response_t* response);
 
@@ -69,7 +74,7 @@ static header_nv_t header_tb[] = {
     HEADER_PAIR(expires, header_process_generic),
     HEADER_PAIR(last_modified, header_process_generic),
     
-    HEADER_PAIR(accept, header_process_generic),
+    HEADER_PAIR(accept, header_process_accept),
     HEADER_PAIR(accept_charset, header_process_generic),
     HEADER_PAIR(accept_encoding, header_process_generic),
     HEADER_PAIR(authorization, header_process_generic),
@@ -198,8 +203,10 @@ int handle_request(connection_t* connection)
 {
     int err = OK;
     request_t* request = &connection->request;
-    buffer_t* buffer = &request->buffer;;
-    response_t* response = pool_alloc(&connection->response_pool);
+    buffer_t* buffer = &request->buffer;
+    queue_node_t* response_node = queue_alloc(&connection->response_queue);
+    response_t* response = (response_t*)&response_node->data;
+    //response_t* response = pool_alloc(&connection->response_pool);
     response_init(response);
     
     int readed = buffer_recv(buffer, connection->fd);
@@ -227,13 +234,14 @@ int handle_request(connection_t* connection)
     if (err == AGAIN)
         return err;
     else if (err == OK) {
+        
         try_get_resource(request, response);
         response_build(response, request);
     }
     // TODO(wgtdkp): request done, 
     request_clear(request);
     
-    queue_push(&connection->response_queue, response);
+    queue_push(&connection->response_queue, response_node);
     
     // Send response(s) directly, until send buffer is full.
     err = handle_response(connection);
@@ -339,6 +347,8 @@ static int request_process_headers(request_t* request, response_t* response)
     }
 done:
     request->stage = RS_BODY;
+    
+    /* HTTP version */
     // https://www.w3.org/Protocols/rfc2616/rfc2616-sec8.html
     // [14.23] Host
     if (request->version.minor == 1) {
@@ -347,6 +357,10 @@ done:
             return ERR_STATUS(response->status);
         }
     }
+    
+    /* Pragma */
+    
+    
     // TODO(wgtdkp): process content-length if needed
     return OK;
 }
@@ -359,7 +373,7 @@ static int header_process_connection(
     if(strncasecmp("close", headers->connection.begin, 5) == 0)
         request->keep_alive = 0;
     
-    return 0;
+    return OK;
 }
 
 static int header_process_t_encoding(
@@ -386,14 +400,14 @@ static int header_process_t_encoding(
         return ERR_STATUS(response->status);
     }
     
-    return 0;
+    return OK;
 }
 
 static int header_process_host(
         request_t* request, int offset, response_t* response)
 {
     header_process_generic(request, offset, response);
-    return 0;
+    return OK;
 }
 
 static int request_process_body(request_t* request, response_t* response)
@@ -427,6 +441,16 @@ static int request_process_body(request_t* request, response_t* response)
     request->stage = RS_REQUEST_LINE;
     
 
+    return OK;
+}
+
+static int header_process_accept(
+        request_t* request, int offset, response_t* response)
+{
+    header_process_generic(request, offset, response);
+    
+    //parse_accept_value(request);
+    
     return OK;
 }
 

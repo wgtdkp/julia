@@ -52,7 +52,7 @@ static int startup(unsigned short port)
     // If the client closed the connection, then it will cause SIGPIPE
     // Here simplely ignore this SIG
     signal(SIGPIPE, SIG_IGN);
-    signal(SIPINT, sig_int);
+    signal(SIGINT, sig_int);
     
     int listen_fd = 0;
     struct sockaddr_in server_addr = {0};

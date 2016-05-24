@@ -120,6 +120,12 @@ typedef enum {
 } transfer_encoding_t;
 
 typedef struct {
+    string_t type;
+    string_t subtype;
+    float q;
+} accept_type_t;
+
+typedef struct {
     method_t method;
     struct {
         unsigned short major;
@@ -188,7 +194,6 @@ typedef struct {
     request_t request;
     
     pool_t response_pool;
-    pool_t queue_pool;
     queue_t response_queue;
     //response_t response;
     int nrequests;  // # request during this connection

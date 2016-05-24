@@ -70,7 +70,7 @@ int test_pool(void)
 int test_list(void)
 {
     pool_t pool;
-    pool_init(&pool, sizeof(list_node_t), 100, 0);
+    pool_init(&pool, LIST_WIDTH(int), 100, 0);
     list_t list;
     list_init(&list, &pool);
     
@@ -79,13 +79,15 @@ int test_list(void)
     }
   
     for (int i = 0; i < 101; i++) {
-        list_insert(&list, &list.dummy, &arr[i]);
+        list_node_t* new_node = list_alloc(&list);
+        *(int*)&new_node->data = arr[i];
+        list_insert(&list, &list.dummy, new_node);
     }
 
 
     list_node_t* p;
     for (p = list_head(&list); p != NULL; p = p->next) {
-        int* ele = p->data;
+        int* ele = (int*)&p->data;
         printf("list ele: %d\n", *ele);
     }
     
@@ -96,14 +98,9 @@ int test_list(void)
     list_delete(&list, list_tail(&list)->prev->prev);
     
     for (p = list_head(&list); p != NULL; p = p->next) {
-        int* ele = p->data;
+        int* ele = (int*)&p->data;
         printf("list ele: %d\n", *ele);
     }
-    
-    //while (list_head(&list) != NULL) {
-    //    printf("%d \n", *(int*)list_tail(&list)->data);
-    //    list_delete(&list, list_tail(&list));
-    //}
     
     list_clear(&list);
     
@@ -119,7 +116,7 @@ int test_list(void)
 int test_queue(void)
 {
     pool_t pool;
-    pool_init(&pool, sizeof(list_node_t), 100, 0);
+    pool_init(&pool, QUEUE_WIDTH(int), 100, 0);
     queue_t queue;
     queue_init(&queue, &pool);
     
@@ -128,7 +125,9 @@ int test_queue(void)
     }
     
     for (int i = 0; i < 101; i++) {
-        queue_push(&queue, &arr[i]);
+        queue_node_t* new_node = queue_alloc(&queue);
+        *(int*)&new_node->data = arr[i];
+        queue_push(&queue, new_node);
     }
     
     while (!queue_empty(&queue)) {
@@ -145,8 +144,8 @@ int test_queue(void)
 int main(void)
 {
     //test_vector();
-    test_pool();
-    //test_list();
+    //test_pool();
+    test_list();
     //test_queue();
     return 0;
 }

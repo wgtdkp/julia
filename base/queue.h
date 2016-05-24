@@ -4,6 +4,9 @@
 #include "list.h"
 #include "pool.h"
 
+#define QUEUE_WIDTH(type)   LIST_WIDTH(type)
+
+
 typedef list_node_t queue_node_t;
 
 typedef struct {
@@ -12,8 +15,7 @@ typedef struct {
 
 static inline int queue_init(queue_t* queue, pool_t* pool)
 {
-    list_init(&queue->container, pool);
-    return OK;
+    return list_init(&queue->container, pool);
 }
 
 static inline void queue_clear(queue_t* queue)
@@ -21,7 +23,12 @@ static inline void queue_clear(queue_t* queue)
     list_clear(&queue->container);
 }
 
-static inline int queue_push(queue_t* queue, void* x)
+static inline queue_node_t* queue_alloc(queue_t* queue)
+{
+    return list_alloc(&queue->container);
+}
+
+static inline int queue_push(queue_t* queue, queue_node_t* x)
 {
     list_t* list = &queue->container;
     return list_insert(list, list_tail(list), x);
@@ -32,7 +39,7 @@ static inline void* queue_pop(queue_t* queue)
     void* ret;
     list_t* list = &queue->container;
     list_node_t* head = list_head(list);
-    ret = head == NULL ? NULL: head->data;
+    ret = head == NULL ? NULL: &head->data;
     list_delete(list, head);
     return ret;
 }
@@ -53,7 +60,7 @@ static inline void* queue_front(queue_t* queue)
     list_node_t* head = list_head(list);
     if (head == NULL)
         return NULL;
-    return head->data;
+    return &head->data;
 }
 
 static inline void* queue_back(queue_t* queue)
@@ -62,7 +69,7 @@ static inline void* queue_back(queue_t* queue)
     list_node_t* tail = list_tail(list);
     if (tail == &list->dummy)
         return NULL;
-    return tail->data;
+    return &tail->data;
 }
 
 #endif
