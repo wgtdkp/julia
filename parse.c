@@ -809,9 +809,9 @@ header_done:
 
 int parse_accept_value(request_t* request)
 {
-/*
+
     string_t* val = &request->header_value;
-    list* accept_list = &requets->accept_list;
+    list_t* accept_list = &request->accepts;
     
     for (char* p = val->begin; p < val->end;) {
         while (*p == ' ' && p != val->end) {
@@ -819,8 +819,11 @@ int parse_accept_value(request_t* request)
         }
         if (p == val->end)
             return OK;
+            
         list_node_t* type_node = list_alloc(accept_list);
-        accept_type_t* accept_type = &type_node->data;
+        accept_type_t* accept_type = (accept_type_t*)&type_node->data;
+        accept_type->q = 1.0f;
+        
         accept_type->type.begin = p;
         while (*p != '/' && p != val->end) {
             ++p;
@@ -848,8 +851,6 @@ int parse_accept_value(request_t* request)
         // Other params are ignored
         if (p[0] == 'q' && p[1] == '=' && p != val->end) {
             accept_type->q = atof(p + 2);
-        } else {
-            accept_type = 1;
         }
         
         while (*p != ';' && *p != ',' && p != val->end) {
@@ -858,9 +859,19 @@ int parse_accept_value(request_t* request)
         if (*p == ';')
             goto param;
     media_range:
+        ++p;
         list_insert(accept_list, list_tail(accept_list), type_node);
     }
-*/    
+/*
+    list_node_t* p = list_head(accept_list);
+    while (p != NULL) {
+        accept_type_t* ac = (accept_type_t*)&p->data;
+        print_string("type: %*s\n", ac->type);
+        print_string("subtype: %*s\n", ac->subtype);
+        printf("q: %f\n", ac->q);
+        p = p->next;
+    }
+*/
     return OK;
 }
 

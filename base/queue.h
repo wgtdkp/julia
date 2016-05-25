@@ -4,6 +4,8 @@
 #include "list.h"
 #include "pool.h"
 
+#define QUEUE_WIDTH(type)   LIST_WIDTH(type) 
+
 
 typedef list_node_t queue_node_t;
 
@@ -11,10 +13,9 @@ typedef struct {
     list_t container;
 } queue_t;
 
-static inline int queue_init(queue_t* queue,
-        int width, int chunk_size, int nchunks)
+static inline int queue_init(queue_t* queue, pool_t* pool)
 {
-    return list_init(&queue->container, width, chunk_size, nchunks);
+    return list_init(&queue->container, pool);
 }
 
 static inline void queue_clear(queue_t* queue)

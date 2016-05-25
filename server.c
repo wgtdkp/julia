@@ -37,14 +37,27 @@
 
 int doc_root_fd;
 
+// DEBUG:
+clock_t total = 0;
+int total_reqs = 0;
+int max_connection = 0;
+int max_response = 0;
+
 static int startup(unsigned short port);
 static int server_init(const char* doc_root);
 static void usage(void);
 
 static void sig_int(int signo)
 {
+    float total_time = 1.0f * total / CLOCKS_PER_SEC;
     // TODO(wgtdkp): print statistic info.
-    
+    printf("[%d]: time: %f, total reqs: %d, RPS: %f\n",
+            getpid(), total_time, total_reqs, total_reqs / total_time);
+    printf("connection pool allocated: %d\n", connection_pool.nallocated);
+    printf("max connection allocated: %d\n", max_connection);
+    printf("response pool allocated: %d\n", response_pool.nallocated);
+    printf("max response allocated: %d\n", max_response);
+    exit(0);
 }
 
 static int startup(unsigned short port)
@@ -52,7 +65,7 @@ static int startup(unsigned short port)
     // If the client closed the connection, then it will cause SIGPIPE
     // Here simplely ignore this SIG
     signal(SIGPIPE, SIG_IGN);
-    //signal(SIGINT, sig_int);
+    signal(SIGINT, sig_int);
     
     int listen_fd = 0;
     struct sockaddr_in server_addr = {0};
@@ -94,8 +107,10 @@ static int server_init(const char* doc_root)
     
     header_map_init();
     mime_map_init();
-    // Init pool with 256 connection
-    pool_init(&connection_pool, sizeof(connection_t), 256, 1);
+    
+    pool_init(&connection_pool, sizeof(connection_t), 8, 0);
+    pool_init(&response_pool, QUEUE_WIDTH(response_t), 8, 0);
+    pool_init(&accept_pool, LIST_WIDTH(accept_type_t), 4, 0);
     
     
     epoll_fd = epoll_create1(0);
@@ -129,13 +144,12 @@ int main(int argc, char* argv[])
     for (int i = 0; i < NCORES - 1; i++) {
         int pid = fork();
         if (pid == 0) {
-            goto worker;
+            goto work;
         } else {
             workers[i] = pid;
         }
     }
     workers[NCORES - 1] = getpid();
-    /*
     cpu_set_t mask;
     for (int i = 0; i < NCORES; i++) {
         CPU_ZERO(&mask);
@@ -144,8 +158,8 @@ int main(int argc, char* argv[])
         //sched_getaffinity(NCORES[i], sizeof(cpu_set_t), &mask);
         
     }
-    */
-worker:
+
+work:
 #endif
 
     listen_fd = startup(port);
@@ -168,7 +182,8 @@ worker:
             EXIT_ON(errno != EINTR, "epoll_wait");
             continue;
         }
-
+        
+        clock_t begin = clock();
         //TODO(wgtdkp): multithreading here: seperate fds to several threads
         for (int i = 0; i < nfds; i++) {
             // Here is a hacking: 
@@ -192,21 +207,26 @@ worker:
                         close(connection_fd);
                         fprintf(stderr, "too many concurrent connection\n");
                     }
+                    max_connection = max(max_connection, connection_pool.nallocated);
                 }
                 continue;
             }
             if (events[i].events & EPOLLIN) {
                 // Receive request or data
+                ++total_reqs;
+                max_response = max(max_response, response_pool.nallocated);
                 connection_t* connection = (connection_t*)(events[i].data.ptr);
                 handle_request(connection);
             }
             // TODO(wgtdkp): checking errors?
             if (events[i].events & EPOLLOUT) {
                 // Send response
+                assert(0);
                 connection_t* connection = (connection_t*)(events[i].data.ptr);
                 handle_response(connection);
             }
         }
+        total += clock() - begin;
     }
 
     close(listen_fd);

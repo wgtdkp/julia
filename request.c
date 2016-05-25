@@ -171,7 +171,7 @@ void request_init(request_t* request)
 
     memset(&request->headers, 0, sizeof(request->headers));
     
-    //list_init(&request->header_accept, )
+    list_init(&request->accepts, &accept_pool);
     
     string_init(&request->request_line);
     string_init(&request->header_name);
@@ -451,7 +451,7 @@ static int header_process_accept(
 {
     header_process_generic(request, offset, response);
     
-    //parse_accept_value(request);
+    parse_accept_value(request);
     
     return OK;
 }

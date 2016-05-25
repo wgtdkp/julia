@@ -13,6 +13,8 @@
 int epoll_fd;
 struct epoll_event events[MAX_EVENT_NUM];
 pool_t connection_pool;
+pool_t response_pool;
+pool_t accept_pool;
 
 static int set_nonblocking(int fd);
 
@@ -33,7 +35,7 @@ connection_t* open_connection(int fd, pool_t* pool)
     request_init(&connection->request);
     connection->nrequests = 0;
 
-    queue_init(&connection->response_queue, sizeof(response_t), 16, 1);   
+    queue_init(&connection->response_queue, &response_pool);   
     
     return connection;
 }
