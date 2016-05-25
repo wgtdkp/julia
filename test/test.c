@@ -16,18 +16,20 @@ int test_vector(void)
     }
     
     vector_t vec;
-    vector_init(&vec, 6);
+    vector_init(&vec, sizeof(int), 6);
+    int* vec_data = vec.data;
     for (int i = 0; i < vec.size; i++) {
-        vec.data[i] = &arr[i];
-        printf("vec[%d]: %d\n", i, *(int*)vec.data[i]);
+        vec_data[i] = arr[i];
+        printf("vec[%d]: %d\n", i, vec_data[i]);
     }
     printf("vec.size: %d\n", vec.size);
     printf("vec.capacity: %d\n", vec.capacity);
     
     vector_clear(&vec);
     for (int i = 0; i < 101; i++) {
-        vector_push(&vec, &arr[i]);
-        printf("vec[%d]: %d\n", i, *(int*)vec.data[i]);
+        *(int*)vector_push(&vec) = arr[i];
+        //vector_push(&vec);
+        printf("vec[%d]: %d\n", i, ((int*)vec.data)[i]);
     }
     
     while (vec.size > 0) {
@@ -35,44 +37,50 @@ int test_vector(void)
     }
     printf("vec.size: %d\n", vec.size);
     printf("vec.capacity: %d\n", vec.capacity);
-       
+    
+    vector_clear(&vec);
+    
+    printf("vec.size: %d\n", vec.size);
+    printf("vec.capacity: %d\n", vec.capacity);
+    printf("vec.data: %p\n", vec.data);
     return 0;
 }
 
 int test_pool(void)
 {
     pool_t pool;
-    vector_t vec;
-    vector_init(&vec, 0);
-    pool_init(&pool, sizeof(int), 101, 1);
+    pool_init(&pool, sizeof(int), 100, 0);
+    
+    int* arr[101];
     
     for (int i = 0; i < 101; i++) {
         int* ele = pool_alloc(&pool);
         *ele = i;
-        vector_push(&vec, ele);
+        arr[i] = ele;
     }
-    
+
     printf("pool.nallocated: %d\n", pool.nallocated);
     printf("chunck number: %d\n", pool.chunks.size);
-    while (vec.size > 0) {
-        int* ele = vector_pop(&vec);
-        printf("back: %d\n", *ele);
-        pool_free(&pool, ele);
+
+    for (int i = 0; i < 101; i++) {
+        pool_free(&pool, arr[i]);
     }
     
     printf("pool.nallocated: %d\n", pool.nallocated);
     printf("chunck number: %d\n", pool.chunks.size);
 
     pool_clear(&pool);
+    
+    printf("pool.nallocated: %d\n", pool.nallocated);
+    printf("chunck number: %d\n", pool.chunks.size);
+
     return 0;
 }
 
 int test_list(void)
 {
-    pool_t pool;
-    pool_init(&pool, LIST_WIDTH(int), 100, 0);
     list_t list;
-    list_init(&list, &pool);
+    list_init(&list, sizeof(int), 100, 0);
     
     for (int i = 0; i < 101; i++) {
         arr[i] = i;
@@ -92,7 +100,7 @@ int test_list(void)
     }
     
     printf("list size: %d\n", list.size);
-    printf("pool allocated: %d\n", pool.nallocated);
+    printf("pool allocated: %d\n", list.pool.nallocated);
     
     list_delete(&list, list_head(&list)->next->next);
     list_delete(&list, list_tail(&list)->prev->prev);
@@ -105,20 +113,24 @@ int test_list(void)
     list_clear(&list);
     
     printf("list size: %d\n", list.size);
-    printf("pool allocated: %d\n", pool.nallocated);
+    printf("pool allocated: %d\n", list.pool.nallocated);
     printf("list head: %p \n", list_head(&list));
     printf("list tail: %p \n", list_tail(&list));
     
-    pool_clear(&pool);
+    list_clear(&list);
+    
+    printf("list size: %d\n", list.size);
+    printf("pool allocated: %d\n", list.pool.nallocated);
+    printf("list head: %p \n", list_head(&list));
+    printf("list tail: %p \n", list_tail(&list));
+    
     return 0;
 }
 
 int test_queue(void)
 {
-    pool_t pool;
-    pool_init(&pool, QUEUE_WIDTH(int), 100, 0);
     queue_t queue;
-    queue_init(&queue, &pool);
+    queue_init(&queue, sizeof(int), 100, 0);
     
     for (int i = 0; i < 101; i++) {
         arr[i] = i;
@@ -131,9 +143,14 @@ int test_queue(void)
     }
     
     while (!queue_empty(&queue)) {
-        int* ele = queue_pop(&queue);
+        int* ele = queue_front(&queue);
         printf("ele: %d\n", *ele);
+        queue_pop(&queue);
     }
+    
+    printf("queue size: %d\n", queue_size(&queue));
+    
+    queue_clear(&queue);
     
     printf("queue size: %d\n", queue_size(&queue));
     
@@ -145,7 +162,7 @@ int main(void)
 {
     //test_vector();
     //test_pool();
-    test_list();
-    //test_queue();
+    //test_list();
+    test_queue();
     return 0;
 }

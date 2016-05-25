@@ -132,7 +132,8 @@ typedef struct {
         unsigned short minor;
     } version;
     request_headers_t headers;
-    int status;
+    //int status;
+    list_t* header_accept;
 
     // For state machine
     int state;
@@ -192,8 +193,6 @@ typedef struct {
     struct epoll_event event;
 
     request_t request;
-    
-    pool_t response_pool;
     queue_t response_queue;
     //response_t response;
     int nrequests;  // # request during this connection

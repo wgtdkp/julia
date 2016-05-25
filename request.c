@@ -171,6 +171,8 @@ void request_init(request_t* request)
 
     memset(&request->headers, 0, sizeof(request->headers));
     
+    //list_init(&request->header_accept, )
+    
     string_init(&request->request_line);
     string_init(&request->header_name);
     string_init(&request->header_value);

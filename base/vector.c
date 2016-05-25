@@ -8,10 +8,11 @@
 #include <stdint.h>
 
 
-int vector_init(vector_t* vec, int size)
+int vector_init(vector_t* vec, int width, int size)
 {
+    assert(width != 0);
     if (size != 0) {
-        vec->data = malloc(sizeof(void*) * size);
+        vec->data = malloc(width * size);
         if (vec->data == NULL)
             return ERROR;
     } else {
@@ -20,6 +21,7 @@ int vector_init(vector_t* vec, int size)
 
     vec->size = size;
     vec->capacity = size;
+    vec->width = width;
     return OK;
 }
 
@@ -27,7 +29,7 @@ int vector_reserve(vector_t* vec, int c)
 {
     if (c != 0) {
         assert(vec->data == NULL);
-        vec->data = malloc(sizeof(void*) * c);
+        vec->data = malloc(vec->width * c);
         if (vec->data == NULL)
             return ERROR;
     }
@@ -38,7 +40,7 @@ int vector_resize(vector_t* vec, int new_size)
 {
     if (new_size > vec->capacity) {
         int new_capacity = max(new_size, vec->capacity * 2 + 1);
-        vec->data = realloc(vec->data, sizeof(void*) * new_capacity);
+        vec->data = realloc(vec->data, vec->width * new_capacity);
         if (vec->data == NULL)
             return ERROR;
         vec->capacity = new_capacity;
@@ -48,19 +50,11 @@ int vector_resize(vector_t* vec, int new_size)
     return OK;
 }
 
-int vector_push(vector_t* vec, void* x)
-{
-    if (vector_resize(vec, vec->size + 1) != OK)
-        return ERROR;
-    vec->data[vec->size - 1] = x;
-    return OK;
-}
-
 void* vector_pop(vector_t* vec)
 {
     if (vec->size == 0)
         return NULL;
-    return vec->data[--vec->size]; 
+    return (void*)((char*)vec->data + vec->width * (--vec->size)); 
 }
 
 void vector_clear(vector_t* vec)

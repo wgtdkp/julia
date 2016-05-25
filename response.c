@@ -267,7 +267,6 @@ int handle_response(connection_t* connection)
         }
         
         queue_pop(&connection->response_queue);
-        pool_free(&connection->response_pool, response);
         if (close || !request->keep_alive) {
             // TODO(wgtdkp): set linger ?
             close_connection(connection);

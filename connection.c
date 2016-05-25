@@ -32,9 +32,8 @@ connection_t* open_connection(int fd, pool_t* pool)
     
     request_init(&connection->request);
     connection->nrequests = 0;
-    
-    pool_init(&connection->response_pool, QUEUE_WIDTH(response_t), 16, 1);
-    queue_init(&connection->response_queue, &connection->response_pool);   
+
+    queue_init(&connection->response_queue, sizeof(response_t), 16, 1);   
     
     return connection;
 }
@@ -43,7 +42,6 @@ void close_connection(connection_t* connection)
 {
     close(connection->fd);  // The events automatically removed
     // The order cannot be reversed
-    pool_clear(&connection->response_pool);
     queue_clear(&connection->response_queue);
     
     pool_free(connection->pool, connection);

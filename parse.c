@@ -809,7 +809,7 @@ header_done:
 
 int parse_accept_value(request_t* request)
 {
-    /*
+/*
     string_t* val = &request->header_value;
     list* accept_list = &requets->accept_list;
     

@@ -3,9 +3,6 @@
 
 #include "pool.h"
 
-#define LIST_WIDTH(type)    \
-    2 * sizeof(list_node_t*) + sizeof(type)
-
 typedef struct list_node list_node_t; 
 struct list_node {
     list_node_t* next;
@@ -16,7 +13,7 @@ struct list_node {
 typedef struct {
     int size;
     list_node_t dummy;
-    pool_t* pool;
+    pool_t pool;
 } list_t;
 
 int list_insert(list_t* list, list_node_t* pos, list_node_t* new_node);
@@ -32,12 +29,15 @@ static inline list_node_t* list_tail(list_t* list)
     return list->dummy.prev;
 }
 
-static inline int list_init(list_t* list, pool_t* pool)
+static inline int list_init(list_t* list,
+        int width, int chunk_size, int nchunks)
 {
     list->size = 0;
     list->dummy.next = NULL;            // The head
     list->dummy.prev = &list->dummy;    // The tail
-    list->pool = pool;
+    
+    pool_init(&list->pool, 2 * sizeof(list_node_t*) + width,
+            chunk_size, nchunks);
     return OK;
 }
 
@@ -46,11 +46,12 @@ static inline void list_clear(list_t* list)
     while (list_head(list) != NULL) {
         list_delete(list, list_head(list));
     }
+    pool_clear(&list->pool);
 }
 
 static inline list_node_t* list_alloc(list_t* list)
 {
-    return pool_alloc(list->pool);
+    return pool_alloc(&list->pool);
 }
 
 #endif
