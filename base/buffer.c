@@ -56,8 +56,8 @@ int buffer_send(buffer_t* buffer, int fd)
 int buffer_append_string(buffer_t* buffer, const string_t str)
 {
     int margin = buffer->limit - buffer->end;
-    int appended = min(margin, str.end - str.begin);
-    memcpy(buffer->end, str.begin, appended);
+    int appended = min(margin, str.len);
+    memcpy(buffer->end, str.data, appended);
     buffer->end += appended;
     return appended;
 }

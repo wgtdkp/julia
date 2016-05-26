@@ -77,9 +77,18 @@ enum {
     URI_S_QUERY,
 };
 
+static vector_t header_values;
+static vector_t header_value_params;
 
 static int parse_uri(request_t* request, char* p);
 static int parse_method(char* begin, char* end);
+static void split_header_value(string_t* val, char split, vector_t* vec);
+
+void parse_init(void)
+{
+    vector_init(&header_values, sizeof(string_t), 0);
+    vector_init(&header_value_params, sizeof(string_t), 0);
+}
 
 static inline int parse_method(char* begin, char* end)
 {
@@ -140,7 +149,7 @@ int parse_request_line(request_t* request)
         case RL_S_BEGIN:
             switch (ch) {
             case 'A' ... 'Z':
-                request->request_line.begin = p;
+                request->request_line.data = p;
                 request->state = RL_S_METHOD;
                 break;
             default:
@@ -153,7 +162,7 @@ int parse_request_line(request_t* request)
             case 'A' ... 'Z':
                 break;
             case ' ':
-                request->method = parse_method(request->request_line.begin, p);
+                request->method = parse_method(request->request_line.data, p);
                 if (request->method == ERR_INVALID_METHOD)
                     return request->method;
                 request->state = RL_S_SP_BEFORE_URI;
@@ -170,7 +179,7 @@ int parse_request_line(request_t* request)
             case ' ':
                 break;
             default:
-                request->uri_state = URI_S_BEGIN;
+                request->uri.state = URI_S_BEGIN;
                 if ((uri_err = parse_uri(request, p)) != OK)
                     return uri_err;
                 request->state = RL_S_URI;
@@ -192,7 +201,7 @@ int parse_request_line(request_t* request)
                     return uri_err;
                 if (ch == ' ') {
                     if (request->uri.nentries < request->uri.nddots) {
-                        request->uri.abs_path.end = request->uri.abs_path.begin + 1;        
+                        request->uri.abs_path.len = 1;        
                     }
                 }
                 break;
@@ -318,7 +327,7 @@ int parse_request_line(request_t* request)
 
 done:
     buffer->begin = p + 1;
-    request->request_line.end = p;
+    request->request_line.len = p - request->request_line.data;
     request->state = HL_S_BEGIN;
     return OK;
 }
@@ -328,18 +337,19 @@ done:
  */
 static int parse_uri(request_t* request, char* p)
 { 
+    uri_t* uri = &request->uri;
     char ch = *p;
-    switch (request->uri_state) {
+    switch (uri->state) {
     case URI_S_BEGIN:
         switch (ch) {
         case '/':
-            request->uri.abs_path.begin = p;
-            request->uri_state = URI_S_ABS_PATH_SLASH;
+            uri->abs_path.data = p;
+            uri->state = URI_S_ABS_PATH_SLASH;
             break;
         case 'A' ... 'Z':
         case 'a' ... 'z':
-            request->uri.scheme.begin = p;
-            request->uri_state = URI_S_SCHEME;
+            uri->scheme.data = p;
+            uri->state = URI_S_SCHEME;
             break; 
         default:
             return ERR_INVALID_URI;
@@ -356,8 +366,8 @@ static int parse_uri(request_t* request, char* p)
         case '.':
             break;
         case ':':
-            request->uri.scheme.end = p;
-            request->uri_state = URI_S_SCHEME_COLON;
+            uri->scheme.len = p - uri->scheme.data;
+            uri->state = URI_S_SCHEME_COLON;
             break;
         default:
             return ERR_INVALID_URI;
@@ -367,7 +377,7 @@ static int parse_uri(request_t* request, char* p)
     case URI_S_SCHEME_COLON:
         switch (ch) {
         case '/':
-            request->uri_state = URI_S_SCHEME_SLASH;
+            uri->state = URI_S_SCHEME_SLASH;
             break;
         default:
             return ERR_INVALID_URI;
@@ -377,7 +387,7 @@ static int parse_uri(request_t* request, char* p)
     case URI_S_SCHEME_SLASH:
         switch (ch) {
         case '/':
-            request->uri_state = URI_S_SCHEME_SLASH_SLASH;
+            uri->state = URI_S_SCHEME_SLASH_SLASH;
             break;
         default:
             return ERR_INVALID_URI;
@@ -389,8 +399,8 @@ static int parse_uri(request_t* request, char* p)
         case 'A' ... 'Z':
         case 'a' ... 'z':
         case '0' ... '9':
-            request->uri.host.begin = p;
-            request->uri_state = URI_S_HOST;
+            uri->host.data = p;
+            uri->state = URI_S_HOST;
             break;
         default:
             return ERR_INVALID_URI;
@@ -406,11 +416,11 @@ static int parse_uri(request_t* request, char* p)
         case '-':
             break;
         case ':':
-            request->uri_state = URI_S_PORT;
+            uri->state = URI_S_PORT;
             break;
         case '/':
-            request->uri.abs_path.begin = p;
-            request->uri_state = URI_S_ABS_PATH_SLASH;
+            uri->abs_path.data = p;
+            uri->state = URI_S_ABS_PATH_SLASH;
             break;
         default:
             return ERR_INVALID_URI;
@@ -422,19 +432,19 @@ static int parse_uri(request_t* request, char* p)
         case ' ':
             // For example: http://localhost
             // We set uri to the first slash after colon(':')
-            request->uri.abs_path.begin = request->uri.host.begin - 2;
-            request->uri.abs_path.end = request->uri.host.begin - 1;
+            uri->abs_path.data = uri->host.data - 2;
+            uri->abs_path.len = 1;
 
-            ++request->uri.port.begin;
-            request->uri.port.end = p;
-            request->uri_state = URI_S_BEGIN;
+            ++uri->port.data;
+            uri->port.len = p - uri->port.data;
+            uri->state = URI_S_BEGIN;
             break;
         case '/':
-            request->uri.abs_path.begin = p;
+            uri->abs_path.data = p;
 
-            ++request->uri.port.begin;
-            request->uri.port.end = p;
-            request->uri_state = URI_S_ABS_PATH_SLASH;
+            ++uri->port.data;
+            uri->port.len = p - uri->port.data;
+            uri->state = URI_S_ABS_PATH_SLASH;
             break;
         case '0' ... '9':
             break;
@@ -478,22 +488,22 @@ static int parse_uri(request_t* request, char* p)
     case URI_S_ABS_PATH_SLASH:
         switch (ch) {
         case ' ':
-            request->uri.abs_path.end = p;
-            request->uri_state = URI_S_BEGIN;
+            uri->abs_path.len = p - uri->abs_path.data;
+            uri->state = URI_S_BEGIN;
             break;
         case '.':
-            request->uri_state = URI_S_ABS_PATH_DOT;
+            uri->state = URI_S_ABS_PATH_DOT;
             break;
         case '?':
-            request->uri.abs_path.end = p;
+            uri->abs_path.len = p - uri->abs_path.data;
             
-            request->uri.query.begin = p;
-            request->uri_state = URI_S_QUERY;
+            uri->query.data = p;
+            uri->state = URI_S_QUERY;
             break;
         case '/':
             break;
         case ALLOWED_IN_ABS_PATH:
-            request->uri_state = URI_S_ABS_PATH_ENTRY;
+            uri->state = URI_S_ABS_PATH_ENTRY;
             break;
         default:
             return ERR_INVALID_URI;
@@ -503,25 +513,25 @@ static int parse_uri(request_t* request, char* p)
     case URI_S_ABS_PATH_DOT:
         switch (ch) {
         case ' ':
-            request->uri.abs_path.end = p;
-            request->uri_state = URI_S_BEGIN;
+            uri->abs_path.len = p - uri->abs_path.data;
+            uri->state = URI_S_BEGIN;
             break;
         case '.':
-            request->uri_state = URI_S_ABS_PATH_DDOT;
+            uri->state = URI_S_ABS_PATH_DDOT;
             break;
         case '?':
-            request->uri.abs_path.end = p;
+            uri->abs_path.len = p - uri->abs_path.data;
             
-            request->uri.query.begin = p;
-            request->uri_state = URI_S_QUERY;
+            uri->query.data = p;
+            uri->state = URI_S_QUERY;
             break;
         case '/':
-            request->uri_state = URI_S_ABS_PATH_SLASH;
+            uri->state = URI_S_ABS_PATH_SLASH;
             break;
         case ALLOWED_IN_ABS_PATH:
             // Extension begins at the '.'
-            request->uri.extension.begin = p - 1;
-            request->uri_state = URI_S_EXTENSION;
+            uri->extension.data = p - 1;
+            uri->state = URI_S_EXTENSION;
             break;
         default:
             return ERR_INVALID_URI;
@@ -531,28 +541,28 @@ static int parse_uri(request_t* request, char* p)
     case URI_S_ABS_PATH_DDOT:
         switch (ch) {
         case ' ':
-            ++request->uri.nddots;
-            request->uri.abs_path.end = p;
-            request->uri_state = URI_S_BEGIN;
+            ++uri->nddots;
+            uri->abs_path.len = p - uri->abs_path.data;
+            uri->state = URI_S_BEGIN;
             break;
         case '.':
-            request->uri.extension.begin = p;
-            request->uri_state = URI_S_EXTENSION;
+            uri->extension.data = p;
+            uri->state = URI_S_EXTENSION;
             break;
         case '?':
-            ++request->uri.nddots;
-            request->uri.abs_path.end = p;
+            ++uri->nddots;
+            uri->abs_path.len = p - uri->abs_path.data;
             
-            request->uri.query.begin = p;
-            request->uri_state = URI_S_QUERY;
+            uri->query.data = p;
+            uri->state = URI_S_QUERY;
             break;
         case '/':
-            ++request->uri.nddots;
-            request->uri_state = URI_S_ABS_PATH_SLASH;
+            ++uri->nddots;
+            uri->state = URI_S_ABS_PATH_SLASH;
             break;
         case ALLOWED_IN_ABS_PATH:
-            request->uri.extension.begin = p;
-            request->uri_state = URI_S_EXTENSION;
+            uri->extension.data = p;
+            uri->state = URI_S_EXTENSION;
             break;
         default:
             return ERR_INVALID_URI;
@@ -562,27 +572,27 @@ static int parse_uri(request_t* request, char* p)
     case URI_S_ABS_PATH_ENTRY:
         switch (ch) {
         case ' ':
-            if (request->uri.nentries >= request->uri.nddots)
-                ++request->uri.nentries;
-            request->uri.abs_path.end = p;
-            request->uri_state = URI_S_BEGIN;
+            if (uri->nentries >= uri->nddots)
+                ++uri->nentries;
+            uri->abs_path.len = p - uri->abs_path.data;
+            uri->state = URI_S_BEGIN;
             break;
         case '.':
-            request->uri.extension.begin = p;
-            request->uri_state = URI_S_EXTENSION;
+            uri->extension.data = p;
+            uri->state = URI_S_EXTENSION;
             break;
         case '?':
-            if (request->uri.nentries >= request->uri.nddots)
-                ++request->uri.nentries;
-            request->uri.abs_path.end = p;
+            if (uri->nentries >= uri->nddots)
+                ++uri->nentries;
+            uri->abs_path.len = p - uri->abs_path.data;
             
-            request->uri.query.begin = p;
-            request->uri_state = URI_S_QUERY;
+            uri->query.data = p;
+            uri->state = URI_S_QUERY;
             break;
         case '/':
-            if (request->uri.nentries >= request->uri.nddots)
-                ++request->uri.nentries;
-            request->uri_state = URI_S_ABS_PATH_SLASH;
+            if (uri->nentries >= uri->nddots)
+                ++uri->nentries;
+            uri->state = URI_S_ABS_PATH_SLASH;
             break;
         case ALLOWED_IN_ABS_PATH:
             break;
@@ -593,31 +603,31 @@ static int parse_uri(request_t* request, char* p)
     case URI_S_EXTENSION:
         switch (ch) {
         case ' ':
-            if (request->uri.nentries >= request->uri.nddots)
-                ++request->uri.nentries;
-            ++request->uri.extension.begin;
-            request->uri.extension.end = p;
+            if (uri->nentries >= uri->nddots)
+                ++uri->nentries;
+            ++uri->extension.data;
+            uri->extension.len = p - uri->extension.data;
             
-            request->uri.abs_path.end = p;
-            request->uri_state = URI_S_BEGIN;
+            uri->abs_path.len = p - uri->abs_path.data;
+            uri->state = URI_S_BEGIN;
             break;
         case '.':
-            request->uri.extension.begin = p;
+            uri->extension.data = p;
             break;
         case '/':
-            if (request->uri.nentries >= request->uri.nddots)
-                ++request->uri.nentries;
-            request->uri.extension.begin = NULL;
-            request->uri_state = URI_S_ABS_PATH_SLASH;
+            if (uri->nentries >= uri->nddots)
+                ++uri->nentries;
+            uri->extension.data = NULL;
+            uri->state = URI_S_ABS_PATH_SLASH;
             break;
         case '?':
-            if (request->uri.nentries >= request->uri.nddots)
-                ++request->uri.nentries;
-            ++request->uri.extension.begin;
-            request->uri.extension.end = p;
+            if (uri->nentries >= uri->nddots)
+                ++uri->nentries;
+            ++uri->extension.data;
+            uri->extension.len = p - uri->extension.data;
             
-            request->uri.query.begin = p;
-            request->uri_state = URI_S_QUERY;
+            uri->query.data = p;
+            uri->state = URI_S_QUERY;
             break;
         case ALLOWED_IN_EXTENSION:
             break;
@@ -629,10 +639,10 @@ static int parse_uri(request_t* request, char* p)
     case URI_S_QUERY:
         switch (ch) {
         case ' ':
-            ++request->uri.query.begin;
-            request->uri.query.end = p;
+            ++uri->query.data;
+            uri->query.len = p - uri->query.data;
             
-            request->uri_state = URI_S_BEGIN;
+            uri->state = URI_S_BEGIN;
             break;
         case ALLOWED_IN_QUERY:
             break;
@@ -648,7 +658,6 @@ static int parse_uri(request_t* request, char* p)
     default:
         assert(0);
     }
-    
     
     return OK;
 }
@@ -668,7 +677,7 @@ int parse_header_line(request_t* request)
             case 'A' ... 'Z':
                 *p = *p - 'A' + 'a';
                 ch = *p;
-                request->header_name.begin = p;
+                request->header_name.data = p;
                 request->state = HL_S_NAME;
                 break;
             case '-':
@@ -676,7 +685,7 @@ int parse_header_line(request_t* request)
                 ch = *p;
             case '0' ... '9':
             case 'a' ... 'z':
-                request->header_name.begin = p;
+                request->header_name.data = p;
                 request->state = HL_S_NAME;
                 break;
             case '\r':
@@ -716,7 +725,7 @@ int parse_header_line(request_t* request)
 
                 break;
             case ':':
-                request->header_name.end = p;
+                request->header_name.len = p - request->header_name.data;
                 request->state = HL_S_COLON;
                 break;
             case '\r':
@@ -741,7 +750,7 @@ int parse_header_line(request_t* request)
             case '\n':
                 goto header_done;
             default:
-                request->header_value.begin = p;
+                request->header_value.data = p;
                 request->state = HL_S_VALUE;
                 break;
             }
@@ -750,15 +759,15 @@ int parse_header_line(request_t* request)
         case HL_S_VALUE:
             switch (ch) {
             case ' ':
-                request->header_value.end = p;
+                request->header_value.len = p - request->header_value.data;
                 request->state = HL_S_SP_AFTER_VALUE;
                 break;
             case '\r':
-                request->header_value.end = p;
+                request->header_value.len = p - request->header_value.data;
                 request->state = HL_S_ALMOST_DONE;
                 break;
             case '\n':
-                request->header_value.end = p;
+                request->header_value.len = p - request->header_value.data;
                 goto header_done;
             default:
                 break;
@@ -804,62 +813,74 @@ header_done:
     buffer->begin = p + 1;
     request->state = HL_S_BEGIN;
     
-    return request->header_name.begin == NULL ? EMPTY_LINE: OK;
+    return request->header_name.data == NULL ? EMPTY_LINE: OK;
 }
 
-int parse_accept_value(request_t* request)
+/*
+ * Split *( *LWS element *( *LWS "," *LWS element ))
+ * LWS surround element were trimmed.
+ */
+static void split_header_value(string_t* val, char split, vector_t* vec)
 {
+    vector_resize(vec, 0); // Clear previous data
 
+    string_t* cur = NULL;
+    char* end = val->data + val->len;
+    for (char* p = val->data; p < end; p++) {
+        if (*p == ' ') {
+            if (cur != NULL)
+                cur->len = p - cur->data;
+        } else if (*p == split) {
+            if (cur != NULL) {
+                if (cur->len == 0)
+                    cur->len = p - cur->data;
+                cur = NULL;
+            }
+        } else if (cur == NULL) {
+            cur = vector_push(vec);
+            cur->data = p;
+            cur->len = 0;
+        } else {
+            cur->len = 0;
+        }
+    }
+    if (cur != NULL)
+        cur->len = end - cur->data;
+}
+
+int parse_accept(request_t* request)
+{
     string_t* val = &request->header_value;
     list_t* accept_list = &request->accepts;
     
-    for (char* p = val->begin; p < val->end;) {
-        while (*p == ' ' && p != val->end) {
-            ++p;
+    split_header_value(val, ',', &header_values);
+    for (int i = 0; i < header_values.size; i++) {
+        string_t* val = vector_at(&header_values, i);
+
+        split_header_value(val, ';', &header_value_params);
+        if (header_value_params.size == 0)
+            continue;   // Bad format
+        
+        string_t* type = vector_at(&header_value_params, 0);
+        char* slash = string_find(type, '/');
+        if (slash == NULL) {
+            continue;   // Bad format
         }
-        if (p == val->end)
-            return OK;
-            
+        
         list_node_t* type_node = list_alloc(accept_list);
         accept_type_t* accept_type = (accept_type_t*)&type_node->data;
+        accept_type->type.data = type->data;
+        accept_type->type.len = slash - type->data;
+        accept_type->subtype.data = slash + 1;
+        accept_type->subtype.len = type->len - accept_type->type.len - 1;
+        
         accept_type->q = 1.0f;
-        
-        accept_type->type.begin = p;
-        while (*p != '/' && p != val->end) {
-            ++p;
+        for (int j = 1; j < header_value_params.size; j++) {
+            string_t* param = vector_at(&header_value_params, j);
+            if (param->data[0] == 'q' && param->data[1] == '=') {
+                accept_type->q = atof(&param->data[2]);
+            }
         }
-        if (p == val->end)
-            return ERR_INVALID_HEADER;
-        accept_type->type.end = p;
-        
-        ++p;
-        accept_type->subtype.begin = p;
-        while (*p != ';' && *p != ',' && p != val->end) {
-            ++p;
-        }
-        //if (p == val->end)
-        //    return ERR_INVALID_HEADER;
-        accept_type->subtype.end = p;
-        if (*p == ',')
-            goto media_range;
-        
-    param:
-        ++p;
-        while (*p == ' ' && p != val->end) {
-            ++p;
-        }
-        // Other params are ignored
-        if (p[0] == 'q' && p[1] == '=' && p != val->end) {
-            accept_type->q = atof(p + 2);
-        }
-        
-        while (*p != ';' && *p != ',' && p != val->end) {
-            ++p;
-        }
-        if (*p == ';')
-            goto param;
-    media_range:
-        ++p;
         list_insert(accept_list, list_tail(accept_list), type_node);
     }
 /*

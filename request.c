@@ -46,12 +46,12 @@ static int try_get_resource(request_t* request, response_t* response);
 
 
 typedef struct {
-    char* name;
+    string_t name;
     header_val_t val;
 } header_nv_t;
 
 #define HEADER_PAIR(name, processor)    \
-    {#name, {offsetof(request_headers_t, name), processor}}
+    {STRING(#name), {offsetof(request_headers_t, name), processor}}
     
 static header_nv_t header_tb[] = {
     HEADER_PAIR(cache_control, header_process_generic),
@@ -116,27 +116,25 @@ static map_t mime_map = {
   .cur = mime_map_data + MIME_MAP_SIZE  
 };
 
-static char* mime_tb [][2] = {
-    {("htm"),     ("text/html")},
-    {("html"),    ("text/html")},
-    {("gif"),     ("image/gif")},
-    {("ico"),     ("image/x-icon")},
-    {("jpeg"),    ("image/jpeg")},
-    {("jpg"),     ("image/jpeg")},
-    {("svg"),     ("image/svg+xml")},
-    {("txt"),     ("text/plain")},
-    {("zip"),     ("application/zip")},  
+static string_t mime_tb [][2] = {
+    {STRING("htm"),     STRING("text/html")},
+    {STRING("html"),    STRING("text/html")},
+    {STRING("gif"),     STRING("image/gif")},
+    {STRING("ico"),     STRING("image/x-icon")},
+    {STRING("jpeg"),    STRING("image/jpeg")},
+    {STRING("jpg"),     STRING("image/jpeg")},
+    {STRING("svg"),     STRING("image/svg+xml")},
+    {STRING("txt"),     STRING("text/plain")},
+    {STRING("zip"),     STRING("application/zip")},  
 };
-
 
 void header_map_init(void)
 {
     int n = sizeof(header_tb) / sizeof(header_tb[0]);
     for (int i = 0; i < n; i++) {
-        string_t key = string_setto(header_tb[i].name);
         map_val_t val;
         val.header = header_tb[i].val;
-        map_put(&header_map, key, val);
+        map_put(&header_map, header_tb[i].name, val);
     }
 }
 
@@ -144,19 +142,10 @@ void mime_map_init(void)
 {
     int n = sizeof(mime_tb) / sizeof(mime_tb[0]);
     for (int i = 0; i < n; i++) {
-        string_t key = string_setto(mime_tb[i][0]);
         map_val_t val;
-        val.mime = string_setto(mime_tb[i][1]);
-        map_put(&mime_map, key, val);
+        val.mime = mime_tb[i][1];
+        map_put(&mime_map, mime_tb[i][0], val);
     }    
-}
-
-static int header_process_generic(
-        request_t* request, int offset, response_t* response)
-{   
-    string_t* member = (string_t*)((void*)&request->headers + offset);
-    *member = request->header_value;
-    return 0;
 }
 
 /*
@@ -180,7 +169,6 @@ void request_init(request_t* request)
     
     request->stage = RS_REQUEST_LINE;
     request->state = 0; // RL_S_BEGIN
-    request->uri_state = 0; // Meaningless
     request->keep_alive = false;
     request->t_encoding = TE_IDENTITY;
     request->content_length = -1;
@@ -254,12 +242,12 @@ int handle_request(connection_t* connection)
 static int request_process_uri(request_t* request, response_t* response)
 {
     uri_t* uri = &request->uri;
-    *uri->abs_path.end = 0;  // It is safe to do this
+    uri->abs_path.data[uri->abs_path.len] = 0;  // It is safe to do this
     const char* rel_path;
-    if (uri->abs_path.end - uri->abs_path.begin == 1) 
+    if (uri->abs_path.len == 1) 
         rel_path = "./";
     else
-        rel_path = uri->abs_path.begin + 1;
+        rel_path = uri->abs_path.data + 1;
     int fd = openat(doc_root_fd, rel_path, O_RDONLY);
     
     // Open the requested resource failed
@@ -354,7 +342,7 @@ done:
     // https://www.w3.org/Protocols/rfc2616/rfc2616-sec8.html
     // [14.23] Host
     if (request->version.minor == 1) {
-        if (headers->host.begin == NULL) {
+        if (headers->host.data == NULL) {
             response_build_err(response, request, 400);
             return ERR_STATUS(response->status);
         }
@@ -372,7 +360,7 @@ static int header_process_connection(
 {
     header_process_generic(request, offset, response);
     request_headers_t* headers = &request->headers;
-    if(strncasecmp("close", headers->connection.begin, 5) == 0)
+    if(strncasecmp("close", headers->connection.data, 5) == 0)
         request->keep_alive = 0;
     
     return OK;
@@ -383,17 +371,17 @@ static int header_process_t_encoding(
 {
     header_process_generic(request, offset, response);
     string_t* transfer_encoding = &request->headers.transfer_encoding;
-    if (strncasecmp("chunked", transfer_encoding->begin, 7) == 0) {
+    if (strncasecmp("chunked", transfer_encoding->data, 7) == 0) {
         request->t_encoding = TE_CHUNKED;
-    } else if (strncasecmp("gzip", transfer_encoding->begin, 4) == 0
-            || strncasecmp("x-gzip", transfer_encoding->begin, 6) == 0) {
+    } else if (strncasecmp("gzip", transfer_encoding->data, 4) == 0
+            || strncasecmp("x-gzip", transfer_encoding->data, 6) == 0) {
         request->t_encoding = TE_GZIP;            
-    } else if (strncasecmp("compress", transfer_encoding->begin, 8) == 0
-            || strncasecmp("x-compress", transfer_encoding->begin, 10) == 0) {
+    } else if (strncasecmp("compress", transfer_encoding->data, 8) == 0
+            || strncasecmp("x-compress", transfer_encoding->data, 10) == 0) {
         request->t_encoding = TE_COMPRESS;            
-    } else if (strncasecmp("deflate", transfer_encoding->begin, 7) == 0) {
+    } else if (strncasecmp("deflate", transfer_encoding->data, 7) == 0) {
         request->t_encoding = TE_DEFLATE;   
-    } else if (strncasecmp("identity", transfer_encoding->begin, 8) == 0) {
+    } else if (strncasecmp("identity", transfer_encoding->data, 8) == 0) {
         request->t_encoding = TE_IDENTITY;
     } else {
         // Must close the connection as we can't understand the body
@@ -449,10 +437,20 @@ static int request_process_body(request_t* request, response_t* response)
 static int header_process_accept(
         request_t* request, int offset, response_t* response)
 {
-    header_process_generic(request, offset, response);
+    int err = header_process_generic(request, offset, response);
     
-    parse_accept_value(request);
+    err = parse_accept(request);
+    if (err != OK)
+        return err;
     
+    return OK;
+}
+
+static int header_process_generic(
+        request_t* request, int offset, response_t* response)
+{   
+    string_t* member = (string_t*)((void*)&request->headers + offset);
+    *member = request->header_value;
     return OK;
 }
 

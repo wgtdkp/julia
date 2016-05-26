@@ -90,6 +90,7 @@ typedef struct {
     string_t query;
     int nddots;
     int nentries;
+    int state;
 } uri_t;
 
 /*
@@ -143,10 +144,10 @@ typedef struct {
     string_t request_line;
     string_t header_name;
     string_t header_value;
-    int uri_state;
     uri_t uri;
 
     request_stage_t stage;
+    
     bool keep_alive;
     transfer_encoding_t t_encoding;
     int content_length;

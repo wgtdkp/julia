@@ -23,9 +23,14 @@ int vector_resize(vector_t* vec, int new_size);
 void* vector_pop(vector_t* vec);
 void vector_clear(vector_t* vec);
 
+static inline void* vector_at(vector_t* vec, int i)
+{
+    return (void*)((char*)vec->data + vec->width * i);
+}
+
 static inline void* vector_back(vector_t* vec)
 {
-    return (void*)((char*)vec->data + vec->width * (vec->size - 1));
+    return vector_at(vec, vec->size - 1);
 }
 
 static inline void* vector_push(vector_t* vec)

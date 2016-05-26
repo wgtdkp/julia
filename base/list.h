@@ -54,4 +54,9 @@ static inline list_node_t* list_alloc(list_t* list)
     return pool_alloc(list->pool);
 }
 
+static inline void list_free(list_t* list, list_node_t* x)
+{
+    pool_free(list->pool, x);
+}
+
 #endif

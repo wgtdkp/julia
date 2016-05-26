@@ -3,6 +3,7 @@
 #include "base/map.h"
 
 #include "connection.h"
+#include "parse.h"
 #include "request.h"
 #include "response.h"
 #include "util.h"
@@ -104,7 +105,7 @@ static int server_init(const char* doc_root)
     struct rlimit nofile_limit = {65535, 65535};
     setrlimit(RLIMIT_NOFILE, &nofile_limit);
     
-    
+    parse_init();
     header_map_init();
     mime_map_init();
     

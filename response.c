@@ -388,9 +388,9 @@ void response_build_err(response_t* response, request_t* request, int err)
     assert(appended == strlen(CRLF));
     
     if (page != NULL) {
-        buffer_append_string(buffer, string_settol(page, page_len));
+        buffer_append_string(buffer, string_setto(page, page_len));
         appended = buffer_append_string(buffer,
-                string_settol(err_page_tail, page_tail_len));
+                string_setto(err_page_tail, page_tail_len));
         assert(appended == page_tail_len);
     }
 }

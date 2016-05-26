@@ -26,7 +26,7 @@ int list_delete(list_t* list, list_node_t* x)
     else
         list->dummy.prev = x->prev; // The tail
 
-    pool_free(list->pool, x);
+    list_free(list, x);
     --list->size;
     return OK;
 }
