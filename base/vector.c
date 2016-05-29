@@ -50,13 +50,6 @@ int vector_resize(vector_t* vec, int new_size)
     return OK;
 }
 
-void* vector_pop(vector_t* vec)
-{
-    if (vec->size == 0)
-        return NULL;
-    return (void*)((char*)vec->data + vec->width * (--vec->size)); 
-}
-
 void vector_clear(vector_t* vec)
 {
     vec->size = 0;

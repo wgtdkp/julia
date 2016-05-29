@@ -8,10 +8,11 @@
 
 #include "server.h"
 
-#include <stdbool.h>
-
 #include <sys/epoll.h>
 #include <sys/stat.h>
+
+#include <stdint.h>
+
 
 
 extern int epoll_fd;
@@ -93,10 +94,31 @@ typedef struct {
     int state;
 } uri_t;
 
+
+/*
+ * Response
+ */
+typedef struct {
+    int resource_fd;
+    struct stat resource_stat;
+    int status;
+    response_headers_t headers;
+    // Connection must be closed after the response was sent.
+    // This happens when we accept a bad syntax request, and
+    // cannot recover from this status. Because we immediately
+    // discard the request and we thus cannot decide the end
+    // of the bad request or the beginning of next request.
+    uint8_t keep_alive: 1;
+
+    //response_headers_t headers;
+    buffer_t buffer;
+
+} response_t;
+
+
 /*
  * Request
  */
-
 typedef enum {
     M_CONNECT,
     M_DELETE,
@@ -148,50 +170,25 @@ typedef struct {
 
     request_stage_t stage;
     
-    bool keep_alive;
+    uint8_t keep_alive: 1;
+    uint8_t discard_body: 1;
+    uint8_t body_done: 1;
+    
     transfer_encoding_t t_encoding;
-    int content_length;
-
+    int content_length_n;
+    int body_received_n;
+    
+    
+    
     buffer_t buffer;
+    
+    response_t* response;
 } request_t;
 
-/*
- * Response
- */
-
-typedef struct {
-    int resource_fd;
-    struct stat resource_stat;
-    int status;
-    response_headers_t headers;
-    // Connection must be closed after the response was sent.
-    // This happens when we accept a bad syntax request, and
-    // cannot recover from this status. Because we immediately
-    // discard the request and we thus cannot decide the end
-    // of the bad request or the beginning of next request.
-    bool must_close;
-    //response_headers_t headers;
-    buffer_t buffer;
-
-} response_t;
-
-/*
-typedef struct {
-    response_t* front;
-    response_t* back;  
-} response_queue_t;
-
-typedef struct {
-    
-    response_t* cur;
-    int allocated; 
-};
-*/
 
 /*
  * Connection
  */
-
  typedef struct {
     int fd; // socket fd
     struct epoll_event event;

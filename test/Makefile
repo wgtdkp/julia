@@ -1,8 +1,8 @@
 TARGET = test
 
 CC = gcc
-SRCS = test.c ../base/list.c ../base/vector.c ../base/pool.c ../util.c 
-INC = -I/usr/include -I../
+SRCS = test.c ../base/list.c ../base/vector.c ../base/pool.c ../util.c ../parse.c
+INC = -I/usr/include -I../ -I../base
 CFLAGS = -g -std=c11 -Wall -D_XOPEN_SOURCE -D_GNU_SOURCE $(INC)
 
 OBJS_DIR = build/

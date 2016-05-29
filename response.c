@@ -235,7 +235,7 @@ void response_init(response_t* response)
     response->status = 200;
     memset(&response->headers, 0, sizeof(response->headers));
     
-    response->must_close = false;
+    response->keep_alive = 1;
     buffer_init(&response->buffer);
 }
 
@@ -258,7 +258,7 @@ int handle_response(connection_t* connection)
             return OK;
         }
         
-        int close = response->must_close;
+        int close = !response->keep_alive;
         if (put_response(connection->fd, response) == AGAIN) {
             // Response(s) not completely sent
             // Open EPOLLOUT event

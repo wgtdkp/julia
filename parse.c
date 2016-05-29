@@ -911,14 +911,21 @@ int parse_request_body_chunked(request_t* request)
     return OK;
 }
 
-int parse_request_body_no_encoding(request_t* request)
+int parse_request_body_identity(request_t* request)
 {
+    assert(request->content_length_n >= 0);
     buffer_t* buffer = &request->buffer;
-    request->content_length -= buffer_size(buffer);
-    buffer_clear(buffer);
-    if (request->content_length == 0)
-        return OK;
-    else if (request->content_length > 0)
-        return AGAIN;
-    return ERR_INVALID_REQUEST;
+    request->body_received_n += buffer_size(buffer);
+    if (request->body_received_n >= request->content_length_n) {
+        // Received full Body
+        
+        if (request->discard_body) {
+            // There may be data belongs to the next request
+            buffer->begin += request->body_received_n - request->content_length_n;
+            request->body_done = 1;
+            return OK;
+        }
+    }
+    
+    return AGAIN;
 }

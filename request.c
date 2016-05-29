@@ -22,28 +22,26 @@
 #include <unistd.h>
 
 
-static int request_process_uri(request_t* request, response_t* response);
-static int request_process_request_line(
+static int request_handle_uri(request_t* request, response_t* response);
+static int request_handle_request_line(
         request_t* request, response_t* response);
-static int request_process_headers(request_t* request, response_t* response);
-static int request_process_body(request_t* request, response_t* response);
+static int request_handle_headers(request_t* request, response_t* response);
+static int request_handle_body(request_t* request, response_t* response);
 
-static int header_process_generic(
+static int header_handle_generic(
         request_t* request, int offset, response_t* response);
-static int header_process_connection(
+static int header_handle_connection(
         request_t* request, int offset, response_t* response);
-static int header_process_t_encoding(
+static int header_handle_t_encoding(
         request_t* request, int offset, response_t* response);
-static int header_process_host(
+static int header_handle_content_length(
+        request_t* request, int offset, response_t* response);
+static int header_handle_host(
+        request_t* request, int offset, response_t* response);
+static int header_handle_accept(
         request_t* request, int offset, response_t* response);
 
-static int header_process_accept(
-        request_t* request, int offset, response_t* response);
-        
-
-
-static int try_get_resource(request_t* request, response_t* response);
-
+int request_process(request_t* request, response_t* response);
 
 typedef struct {
     string_t name;
@@ -54,44 +52,44 @@ typedef struct {
     {STRING(#name), {offsetof(request_headers_t, name), processor}}
     
 static header_nv_t header_tb[] = {
-    HEADER_PAIR(cache_control, header_process_generic),
-    HEADER_PAIR(connection, header_process_connection),
-    HEADER_PAIR(date, header_process_generic),
-    HEADER_PAIR(pragma, header_process_generic),
-    HEADER_PAIR(trailer, header_process_generic),
-    HEADER_PAIR(transfer_encoding, header_process_t_encoding),
-    HEADER_PAIR(upgrade, header_process_generic),
-    HEADER_PAIR(via, header_process_generic),
-    HEADER_PAIR(warning, header_process_generic),
-    HEADER_PAIR(allow, header_process_generic),
-    HEADER_PAIR(content_encoding, header_process_generic),
-    HEADER_PAIR(content_language, header_process_generic),
-    HEADER_PAIR(content_length, header_process_generic),
-    HEADER_PAIR(content_location, header_process_generic),
-    HEADER_PAIR(content_md5, header_process_generic),
-    HEADER_PAIR(content_range, header_process_generic),
-    HEADER_PAIR(content_type, header_process_generic),
-    HEADER_PAIR(expires, header_process_generic),
-    HEADER_PAIR(last_modified, header_process_generic),
+    HEADER_PAIR(cache_control, header_handle_generic),
+    HEADER_PAIR(connection, header_handle_connection),
+    HEADER_PAIR(date, header_handle_generic),
+    HEADER_PAIR(pragma, header_handle_generic),
+    HEADER_PAIR(trailer, header_handle_generic),
+    HEADER_PAIR(transfer_encoding, header_handle_t_encoding),
+    HEADER_PAIR(upgrade, header_handle_generic),
+    HEADER_PAIR(via, header_handle_generic),
+    HEADER_PAIR(warning, header_handle_generic),
+    HEADER_PAIR(allow, header_handle_generic),
+    HEADER_PAIR(content_encoding, header_handle_generic),
+    HEADER_PAIR(content_language, header_handle_generic),
+    HEADER_PAIR(content_length, header_handle_content_length),
+    HEADER_PAIR(content_location, header_handle_generic),
+    HEADER_PAIR(content_md5, header_handle_generic),
+    HEADER_PAIR(content_range, header_handle_generic),
+    HEADER_PAIR(content_type, header_handle_generic),
+    HEADER_PAIR(expires, header_handle_generic),
+    HEADER_PAIR(last_modified, header_handle_generic),
     
-    HEADER_PAIR(accept, header_process_accept),
-    HEADER_PAIR(accept_charset, header_process_generic),
-    HEADER_PAIR(accept_encoding, header_process_generic),
-    HEADER_PAIR(authorization, header_process_generic),
-    HEADER_PAIR(expect, header_process_generic),
-    HEADER_PAIR(from, header_process_generic),
-    HEADER_PAIR(host, header_process_host),
-    HEADER_PAIR(if_match, header_process_generic),
-    HEADER_PAIR(if_modified_since, header_process_generic),
-    HEADER_PAIR(if_none_match, header_process_generic),
-    HEADER_PAIR(if_range, header_process_generic),
-    HEADER_PAIR(if_unmodified_since, header_process_generic),
-    HEADER_PAIR(max_forwards, header_process_generic),
-    HEADER_PAIR(proxy_authorization, header_process_generic),
-    HEADER_PAIR(range, header_process_generic),
-    HEADER_PAIR(referer, header_process_generic),
-    HEADER_PAIR(te, header_process_generic),
-    HEADER_PAIR(user_agent, header_process_generic),
+    HEADER_PAIR(accept, header_handle_accept),
+    HEADER_PAIR(accept_charset, header_handle_generic),
+    HEADER_PAIR(accept_encoding, header_handle_generic),
+    HEADER_PAIR(authorization, header_handle_generic),
+    HEADER_PAIR(expect, header_handle_generic),
+    HEADER_PAIR(from, header_handle_generic),
+    HEADER_PAIR(host, header_handle_host),
+    HEADER_PAIR(if_match, header_handle_generic),
+    HEADER_PAIR(if_modified_since, header_handle_generic),
+    HEADER_PAIR(if_none_match, header_handle_generic),
+    HEADER_PAIR(if_range, header_handle_generic),
+    HEADER_PAIR(if_unmodified_since, header_handle_generic),
+    HEADER_PAIR(max_forwards, header_handle_generic),
+    HEADER_PAIR(proxy_authorization, header_handle_generic),
+    HEADER_PAIR(range, header_handle_generic),
+    HEADER_PAIR(referer, header_handle_generic),
+    HEADER_PAIR(te, header_handle_generic),
+    HEADER_PAIR(user_agent, header_handle_generic),
 };
 
 #undef HEADER_PAIR
@@ -171,9 +169,11 @@ void request_init(request_t* request)
     request->state = 0; // RL_S_BEGIN
     request->keep_alive = false;
     request->t_encoding = TE_IDENTITY;
-    request->content_length = -1;
+    request->content_length_n = -1;
     
     buffer_init(&request->buffer);
+    
+    request->response = NULL;
 }
 
 void request_clear(request_t* request)
@@ -213,19 +213,19 @@ int handle_request(connection_t* connection)
     //    print_string("%*s", (string_t){buffer->begin, buffer->end});
 
     if (err == OK && request->stage == RS_REQUEST_LINE)
-        err = request_process_request_line(request, response);
+        err = request_handle_request_line(request, response);
     
     if (err == OK && request->stage == RS_HEADERS)
-        err = request_process_headers(request, response);
-
+        err = request_handle_headers(request, response);
+    
+    // TODO(wgtdkp): handle Expect: 100 continue before parse body
     if (err == OK && request->stage == RS_BODY)
-        err = request_process_body(request, response);
+        err = request_handle_body(request, response);
     
     if (err == AGAIN)
         return err;
     else if (err == OK) {
-        
-        try_get_resource(request, response);
+        request_process(request, response);
         response_build(response, request);
     }
     // TODO(wgtdkp): request done, 
@@ -239,7 +239,7 @@ int handle_request(connection_t* connection)
     return err;
 }
 
-static int request_process_uri(request_t* request, response_t* response)
+static int request_handle_uri(request_t* request, response_t* response)
 {
     uri_t* uri = &request->uri;
     uri->abs_path.data[uri->abs_path.len] = 0;  // It is safe to do this
@@ -272,7 +272,7 @@ static int request_process_uri(request_t* request, response_t* response)
     return OK;
 }
 
-static int request_process_request_line(
+static int request_handle_request_line(
         request_t* request,
         response_t* response)
 {
@@ -280,7 +280,7 @@ static int request_process_request_line(
     if (err == AGAIN) {
         return err;
     } else if (err != OK) { // Reuqest line parsing error, can't recovery
-        response->must_close = true;
+        response->keep_alive = false;
         response_build_err(response, request, 400);
         return err;
     }
@@ -288,7 +288,7 @@ static int request_process_request_line(
     
     // Supports only HTTP/1.1 and HTTP/1.0
     if (request->version.major != 1 || request->version.minor > 2) {
-        response->must_close = true;
+        response->keep_alive = false;
         response_build_err(response, request, 505);
         return ERR_STATUS(response->status);
     }
@@ -303,11 +303,11 @@ static int request_process_request_line(
     
     // We still need to receive the left part of this request
     // Thus, the connection will hold
-    request_process_uri(request, response);
+    request_handle_uri(request, response);
     return OK;
 }
 
-static int request_process_headers(request_t* request, response_t* response)
+static int request_handle_headers(request_t* request, response_t* response)
 {
     request_headers_t* headers = &request->headers;
     while (true) {
@@ -355,10 +355,10 @@ done:
     return OK;
 }
 
-static int header_process_connection(
+static int header_handle_connection(
         request_t* request, int offset, response_t* response)
 {
-    header_process_generic(request, offset, response);
+    header_handle_generic(request, offset, response);
     request_headers_t* headers = &request->headers;
     if(strncasecmp("close", headers->connection.data, 5) == 0)
         request->keep_alive = 0;
@@ -366,10 +366,10 @@ static int header_process_connection(
     return OK;
 }
 
-static int header_process_t_encoding(
+static int header_handle_t_encoding(
         request_t* request, int offset, response_t* response)
 {
-    header_process_generic(request, offset, response);
+    header_handle_generic(request, offset, response);
     string_t* transfer_encoding = &request->headers.transfer_encoding;
     if (strncasecmp("chunked", transfer_encoding->data, 7) == 0) {
         request->t_encoding = TE_CHUNKED;
@@ -385,7 +385,7 @@ static int header_process_t_encoding(
         request->t_encoding = TE_IDENTITY;
     } else {
         // Must close the connection as we can't understand the body
-        response->must_close = true;
+        response->keep_alive = false;
         response_build_err(response, request, 415);
         return ERR_STATUS(response->status);
     }
@@ -393,30 +393,44 @@ static int header_process_t_encoding(
     return OK;
 }
 
-static int header_process_host(
+static int header_handle_content_length(
         request_t* request, int offset, response_t* response)
 {
-    header_process_generic(request, offset, response);
+    int len = atoi(request->headers.content_length.data);
+    if (len < 0) {
+        response_build_err(response, request, 400);
+        return ERR_STATUS(response->status);
+    }
+    if (request->method == M_GET || request->method == M_HEAD) {
+        request->discard_body = 1;
+    }
+        
+    request->content_length_n = len;
     return OK;
 }
 
-static int request_process_body(request_t* request, response_t* response)
+static int header_handle_host(
+        request_t* request, int offset, response_t* response)
 {
-    buffer_t* buffer = &request->buffer;
-    if (buffer_size(buffer) == 0)
-        return OK;
+    header_handle_generic(request, offset, response);
+    return OK;
+}
+
+static int request_handle_body(request_t* request, response_t* response)
+{
     int err = OK;
-    
-    if (request->t_encoding == TE_IDENTITY) {
-        if (request->content_length < 0) {
-            response_build_err(response, request, 400);
-            return ERR_STATUS(response->status);
-        }
-        err = parse_request_body_no_encoding(request);
-            
-    } else if (request->t_encoding == TE_CHUNKED)
+    switch (request->t_encoding) {
+    case TE_IDENTITY:
+        err = parse_request_body_identity(request);
+        break;
+    case TE_CHUNKED:
         err = parse_request_body_chunked(request);
-    
+        break;
+    default:
+        // TODO(wgtdkp): cannot understanding error
+        ;
+    }
+       
     switch (err) {
     case AGAIN:
         return AGAIN;
@@ -426,18 +440,17 @@ static int request_process_body(request_t* request, response_t* response)
         response_build_err(response, request, 400);
         return ERR_STATUS(response->status);
     }
-    
+
     // Parse body done
     request->stage = RS_REQUEST_LINE;
-    
 
     return OK;
 }
 
-static int header_process_accept(
+static int header_handle_accept(
         request_t* request, int offset, response_t* response)
 {
-    int err = header_process_generic(request, offset, response);
+    int err = header_handle_generic(request, offset, response);
     
     err = parse_accept(request);
     if (err != OK)
@@ -446,15 +459,20 @@ static int header_process_accept(
     return OK;
 }
 
-static int header_process_generic(
+static int header_handle_generic(
         request_t* request, int offset, response_t* response)
-{   
-    string_t* member = (string_t*)((void*)&request->headers + offset);
+{
+    string_t* member = (string_t*)((char*)&request->headers + offset);
     *member = request->header_value;
     return OK;
 }
 
-static int try_get_resource(request_t* request, response_t* response)
+
+int request_process(request_t* request, response_t* response)
 {
+    request_headers_t* headers = &request->headers;
+    if (headers->cache_control.data) {
+        
+    }
     return OK;
 }
