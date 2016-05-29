@@ -36,6 +36,10 @@ static inline string_t string_setto(char* cstr, int len)
     return (string_t){cstr, len};
 }
 
+static inline char* string_end(string_t* str)
+{
+    return str->data + str->len;
+}
 
 int print_string(const char* format, ...);
 int string_cmp(string_t* lhs, string_t* rhs);

@@ -29,58 +29,10 @@ do {                        \
         return (err);       \
 } while (0)
 
-
-// State machine: request line states
-enum {
-    // Request line states
-    RL_S_BEGIN = 0,
-    RL_S_METHOD,
-    RL_S_SP_BEFORE_URI,
-    RL_S_URI,
-    RL_S_SP_BEFROE_VERSION,
-    RL_S_HTTP_H,
-    RL_S_HTTP_HT,
-    RL_S_HTTP_HTT,
-    RL_S_HTTP_HTTP,
-    RL_S_HTTP_VERSION_SLASH,
-    RL_S_HTTP_VERSION_MAJOR,
-    RL_S_HTTP_VERSION_DOT,
-    RL_S_HTTP_VERSION_MINOR,
-    RL_S_SP_AFTER_VERSION,
-    RL_S_ALMOST_DONE,
-    RL_S_DONE,
-
-    // Header line states
-    HL_S_BEGIN,
-    HL_S_IGNORE,
-    HL_S_NAME,
-    HL_S_COLON,
-    HL_S_SP_BEFORE_VALUE,
-    HL_S_VALUE,
-    HL_S_SP_AFTER_VALUE,
-    HL_S_ALMOST_DONE,
-    HL_S_DONE,
-
-    // URI states
-    URI_S_BEGIN,
-    URI_S_SCHEME,
-    URI_S_SCHEME_COLON,
-    URI_S_SCHEME_SLASH,
-    URI_S_SCHEME_SLASH_SLASH,
-    URI_S_HOST,
-    URI_S_PORT,
-    URI_S_ABS_PATH_DOT,
-    URI_S_ABS_PATH_DDOT,
-    URI_S_ABS_PATH_SLASH,
-    URI_S_ABS_PATH_ENTRY,
-    URI_S_EXTENSION,
-    URI_S_QUERY,
-};
-
 static vector_t header_values;
 static vector_t header_value_params;
 
-static int parse_uri(request_t* request, char* p);
+static int parse_uri(uri_t* request, char* p);
 static int parse_method(char* begin, char* end);
 static void split_header_value(string_t* val, char split, vector_t* vec);
 
@@ -180,7 +132,7 @@ int parse_request_line(request_t* request)
                 break;
             default:
                 request->uri.state = URI_S_BEGIN;
-                if ((uri_err = parse_uri(request, p)) != OK)
+                if ((uri_err = parse_uri(&request->uri, p)) != OK)
                     return uri_err;
                 request->state = RL_S_URI;
                 break;
@@ -197,7 +149,7 @@ int parse_request_line(request_t* request)
                 request->state = RL_S_SP_BEFROE_VERSION;
                 // Fall through
             default: 
-                if ((uri_err = parse_uri(request, p)) != OK)
+                if ((uri_err = parse_uri(&request->uri, p)) != OK)
                     return uri_err;
                 if (ch == ' ') {
                     if (request->uri.nentries < request->uri.nddots) {
@@ -335,9 +287,8 @@ done:
 /*
  * Request-URI = [scheme ":" "//" host[":" port]][abs_path["?" query]]
  */
-static int parse_uri(request_t* request, char* p)
+static int parse_uri(uri_t* uri, char* p)
 { 
-    uri_t* uri = &request->uri;
     char ch = *p;
     switch (uri->state) {
     case URI_S_BEGIN:
@@ -692,12 +643,13 @@ int parse_header_line(request_t* request)
                 request->state = HL_S_ALMOST_DONE;
                 break;
             case '\n':
+                goto header_done;
             default:
                 request->state = HL_S_IGNORE;
                 break;
             }
             break;
-
+        
         case HL_S_IGNORE:
             switch (ch) {
             case '\n':
@@ -707,7 +659,7 @@ int parse_header_line(request_t* request)
                 break;
             }
             break;
-
+        
         case HL_S_NAME:
             switch(ch) {
             case 'A' ... 'Z':
@@ -816,6 +768,24 @@ header_done:
     return request->header_name.data == NULL ? EMPTY_LINE: OK;
 }
 
+void parse_header_host(request_t* request)
+{
+    string_t* host = &request->headers.host;
+    char* semicolon = NULL;
+    for (int i = 0; i < host->len; i++) {
+        if (host->data[i] == ':')
+            semicolon = &host->data[i];
+    }
+    
+    if (semicolon == NULL) {
+        request->host = *host;
+        request->port_n = 80;
+    } else {
+        request->host = (string_t){host->data, semicolon - host->data};
+        request->port_n = atoi(semicolon + 1);
+    }
+}
+
 /*
  * Split *( *LWS element *( *LWS "," *LWS element ))
  * LWS surround element were trimmed.
@@ -848,7 +818,7 @@ static void split_header_value(string_t* val, char split, vector_t* vec)
         cur->len = end - cur->data;
 }
 
-int parse_accept(request_t* request)
+int parse_header_accept(request_t* request)
 {
     string_t* val = &request->header_value;
     list_t* accept_list = &request->accepts;
@@ -913,7 +883,9 @@ int parse_request_body_chunked(request_t* request)
 
 int parse_request_body_identity(request_t* request)
 {
-    assert(request->content_length_n >= 0);
+    if (request->content_length_n <= 0)
+        return OK;
+
     buffer_t* buffer = &request->buffer;
     request->body_received_n += buffer_size(buffer);
     if (request->body_received_n >= request->content_length_n) {

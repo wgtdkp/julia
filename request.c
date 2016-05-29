@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <time.h>
 #include <unistd.h>
 
 
@@ -40,8 +41,10 @@ static int header_handle_host(
         request_t* request, int offset, response_t* response);
 static int header_handle_accept(
         request_t* request, int offset, response_t* response);
+static int header_handle_if_modified_since(
+        request_t* request, int offset, response_t* response);
 
-int request_process(request_t* request, response_t* response);
+static int request_process_headers(request_t* request, response_t* response);
 
 typedef struct {
     string_t name;
@@ -80,7 +83,7 @@ static header_nv_t header_tb[] = {
     HEADER_PAIR(from, header_handle_generic),
     HEADER_PAIR(host, header_handle_host),
     HEADER_PAIR(if_match, header_handle_generic),
-    HEADER_PAIR(if_modified_since, header_handle_generic),
+    HEADER_PAIR(if_modified_since, header_handle_if_modified_since),
     HEADER_PAIR(if_none_match, header_handle_generic),
     HEADER_PAIR(if_range, header_handle_generic),
     HEADER_PAIR(if_unmodified_since, header_handle_generic),
@@ -123,7 +126,8 @@ static string_t mime_tb [][2] = {
     {STRING("jpg"),     STRING("image/jpeg")},
     {STRING("svg"),     STRING("image/svg+xml")},
     {STRING("txt"),     STRING("text/plain")},
-    {STRING("zip"),     STRING("application/zip")},  
+    {STRING("zip"),     STRING("application/zip")},
+    {STRING("css"),     STRING("text/css")},
 };
 
 void header_map_init(void)
@@ -146,6 +150,12 @@ void mime_map_init(void)
     }    
 }
 
+static inline void uri_init(uri_t* uri)
+{
+    memset(uri, 0, sizeof(uri_t));
+    uri->state = URI_S_BEGIN;
+}
+
 /*
  * Request
  */
@@ -163,7 +173,11 @@ void request_init(request_t* request)
     string_init(&request->request_line);
     string_init(&request->header_name);
     string_init(&request->header_value);
-    memset(&request->uri, 0, sizeof(request->uri));
+    
+    uri_init(&request->uri);
+    
+    string_init(&request->host);
+    request->port_n = 80;
     
     request->stage = RS_REQUEST_LINE;
     request->state = 0; // RL_S_BEGIN
@@ -194,10 +208,11 @@ int handle_request(connection_t* connection)
     int err = OK;
     request_t* request = &connection->request;
     buffer_t* buffer = &request->buffer;
-    queue_node_t* response_node = queue_alloc(&connection->response_queue);
-    response_t* response = (response_t*)&response_node->data;
-    //response_t* response = pool_alloc(&connection->response_pool);
-    response_init(response);
+    
+    if (request->response == NULL) {
+        request->response = queue_alloc(&connection->response_queue);
+        response_init(request->response);
+    }
     
     int readed = buffer_recv(buffer, connection->fd);
     // Client closed the connection
@@ -212,26 +227,27 @@ int handle_request(connection_t* connection)
     //if (buffer_size(buffer) > 0)
     //    print_string("%*s", (string_t){buffer->begin, buffer->end});
 
-    if (err == OK && request->stage == RS_REQUEST_LINE)
-        err = request_handle_request_line(request, response);
+    if (err == OK && request->stage == RS_REQUEST_LINE) {
+        err = request_handle_request_line(request, request->response);
+    }
     
-    if (err == OK && request->stage == RS_HEADERS)
-        err = request_handle_headers(request, response);
+    if (err == OK && request->stage == RS_HEADERS) {
+        err = request_handle_headers(request, request->response);
+    }
     
     // TODO(wgtdkp): handle Expect: 100 continue before parse body
-    if (err == OK && request->stage == RS_BODY)
-        err = request_handle_body(request, response);
+    if (err == OK && request->stage == RS_BODY) {
+        err = request_handle_body(request, request->response);
+        if (err != AGAIN) {
+            response_build(request->response, request);
+        }
+    }
     
     if (err == AGAIN)
         return err;
-    else if (err == OK) {
-        request_process(request, response);
-        response_build(response, request);
-    }
-    // TODO(wgtdkp): request done, 
-    request_clear(request);
     
-    queue_push(&connection->response_queue, response_node);
+    queue_push(&connection->response_queue, request->response);
+    request_clear(request);
     
     // Send response(s) directly, until send buffer is full.
     err = handle_response(connection);
@@ -242,12 +258,21 @@ int handle_request(connection_t* connection)
 static int request_handle_uri(request_t* request, response_t* response)
 {
     uri_t* uri = &request->uri;
+
+    if (uri->host.data) {
+        request->host = uri->host;
+        if (uri->port.data)
+            request->port_n = atoi(uri->port.data);
+    }
+    
     uri->abs_path.data[uri->abs_path.len] = 0;  // It is safe to do this
     const char* rel_path;
-    if (uri->abs_path.len == 1) 
+    if (uri->abs_path.len == 1) { 
         rel_path = "./";
-    else
+    } else {
         rel_path = uri->abs_path.data + 1;
+    }
+    
     int fd = openat(doc_root_fd, rel_path, O_RDONLY);
     
     // Open the requested resource failed
@@ -309,9 +334,10 @@ static int request_handle_request_line(
 
 static int request_handle_headers(request_t* request, response_t* response)
 {
-    request_headers_t* headers = &request->headers;
+    int err;
+    
     while (true) {
-        int err = parse_header_line(request);
+        err = parse_header_line(request);
         switch (err) {
         case AGAIN:
             return AGAIN;
@@ -335,24 +361,12 @@ static int request_handle_headers(request_t* request, response_t* response)
             assert(0);
         }
     }
+    
 done:
+    err = request_process_headers(request, response);
+    
     request->stage = RS_BODY;
-    
-    /* HTTP version */
-    // https://www.w3.org/Protocols/rfc2616/rfc2616-sec8.html
-    // [14.23] Host
-    if (request->version.minor == 1) {
-        if (headers->host.data == NULL) {
-            response_build_err(response, request, 400);
-            return ERR_STATUS(response->status);
-        }
-    }
-    
-    /* Pragma */
-    
-    
-    // TODO(wgtdkp): process content-length if needed
-    return OK;
+    return err;
 }
 
 static int header_handle_connection(
@@ -370,6 +384,7 @@ static int header_handle_t_encoding(
         request_t* request, int offset, response_t* response)
 {
     header_handle_generic(request, offset, response);
+    
     string_t* transfer_encoding = &request->headers.transfer_encoding;
     if (strncasecmp("chunked", transfer_encoding->data, 7) == 0) {
         request->t_encoding = TE_CHUNKED;
@@ -409,12 +424,24 @@ static int header_handle_content_length(
     return OK;
 }
 
+// If both the uri in the request contains host[:port]
+// and has this host header, the host header is active.
 static int header_handle_host(
         request_t* request, int offset, response_t* response)
 {
     header_handle_generic(request, offset, response);
+
     return OK;
 }
+
+static int header_handle_if_modified_since(
+        request_t* request, int offset, response_t* response)
+{
+    header_handle_generic(request, offset, response);
+
+    return OK;
+}
+
 
 static int request_handle_body(request_t* request, response_t* response)
 {
@@ -427,7 +454,7 @@ static int request_handle_body(request_t* request, response_t* response)
         err = parse_request_body_chunked(request);
         break;
     default:
-        // TODO(wgtdkp): cannot understanding error
+        // TODO(wgtdkp): cannot understanding
         ;
     }
        
@@ -450,12 +477,9 @@ static int request_handle_body(request_t* request, response_t* response)
 static int header_handle_accept(
         request_t* request, int offset, response_t* response)
 {
-    int err = header_handle_generic(request, offset, response);
+    header_handle_generic(request, offset, response);
     
-    err = parse_accept(request);
-    if (err != OK)
-        return err;
-    
+    parse_header_accept(request);
     return OK;
 }
 
@@ -467,12 +491,84 @@ static int header_handle_generic(
     return OK;
 }
 
-
-int request_process(request_t* request, response_t* response)
+int request_process_headers(request_t* request, response_t* response)
 {
     request_headers_t* headers = &request->headers;
+
+    // RFC 2616 [14.23] Host
+    // https://www.w3.org/Protocols/rfc2616/rfc2616-sec8.html
+    if (headers->host.data) {
+        parse_header_host(request);
+    }
+    
+    // HTTP/1.1 must has the 'Host'' header
+    if ((request->version.minor == 1 && headers->host.data == NULL)
+        || request->host.data == NULL) {
+        response_build_err(response, request, 400);
+        return ERR_STATUS(response->status);
+    }
+    
     if (headers->cache_control.data) {
+        // Nothing to do
         
     }
+    
+    if (headers->expect.data) {
+        if (strncasecmp("100-continue", headers->expect.data,
+                sizeof("100-continue") - 1)) {
+            // Have not received entity data
+            // And we need the entity
+            if (buffer_size(&request->buffer) == 0
+                    && !request->discard_body) {
+                response->status = 100;
+            }
+        }
+    }
+    
+    // If error, log this email to contact
+    if (headers->from.data) {
+        // Used for logger
+    }
+    
+    if (headers->if_modified_since.data) {
+        struct tm tm;
+        if (strptime(headers->if_modified_since.data,
+                "%a,%n%d%n%b%n%Y%n%H:%M:%S%nGMT", &tm) != NULL) {
+            time_t tm_sec = mktime(&tm);
+            if (tm_sec > response->resource_stat.st_mtime) {
+                // RFC 2616 [14.25]
+                if (response->status != 200)
+                    response->status = 304;
+            }
+            
+            // TODO(wgtdkp): handle 'range' header
+        }
+    }
+    
+    // undefied, if also contains 'If-Modified-Since' header
+    if (headers->if_unmodified_since.data) {
+        struct tm tm;
+        if (strptime(headers->if_unmodified_since.data,
+                "%a,%n%d%n%b%n%Y%n%H:%M:%S%nGMT", &tm) != NULL) {
+            time_t tm_sec = mktime(&tm);
+            if (tm_sec <= response->resource_stat.st_mtime) {
+                // RFC 2616 [14.28]
+                if (response->status / 100 == 2)
+                    response->status = 412;
+            }
+        }
+    }
+    
+    // TODO(wgtdkp): handle 'range' header
+    //if (headers->range.data) {
+    //    
+    //}
+
+    // TODO(wgtdkp): handle 'referer' header
+    //if (headers->referer.data) {
+    //    
+    //}
+    
+
     return OK;
 }

@@ -152,11 +152,13 @@ typedef struct {
 } accept_type_t;
 
 typedef struct {
+    uint16_t major;
+    uint16_t minor;
+} version_t;
+
+typedef struct {
     method_t method;
-    struct {
-        unsigned short major;
-        unsigned short minor;
-    } version;
+    version_t version;
     request_headers_t headers;
     //int status;
     list_t accepts;
@@ -167,6 +169,8 @@ typedef struct {
     string_t header_name;
     string_t header_value;
     uri_t uri;
+    string_t host;
+    uint16_t port_n;
 
     request_stage_t stage;
     
@@ -202,6 +206,10 @@ typedef struct {
 
     pool_t* pool;
 } connection_t;
+
+#define HTTP_1_1    (version_t){1, 1}
+#define HTTP_1_0    (version_t){1, 0}
+
 
 connection_t* open_connection(int fd, pool_t* pool);
 void close_connection(connection_t* connection);

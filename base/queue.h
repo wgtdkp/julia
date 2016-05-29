@@ -23,15 +23,16 @@ static inline void queue_clear(queue_t* queue)
     list_clear(&queue->container);
 }
 
-static inline queue_node_t* queue_alloc(queue_t* queue)
+static inline void* queue_alloc(queue_t* queue)
 {
-    return list_alloc(&queue->container);
+    return (void*)(&list_alloc(&queue->container)->data);
 }
 
-static inline int queue_push(queue_t* queue, queue_node_t* x)
+static inline int queue_push(queue_t* queue, void* x)
 {
     list_t* list = &queue->container;
-    return list_insert(list, list_tail(list), x);
+    void* node_x = (char*)x - sizeof(list_node_t*) * 2;
+    return list_insert(list, list_tail(list), node_x);
 }
 
 static inline void queue_pop(queue_t* queue)

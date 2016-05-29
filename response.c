@@ -353,7 +353,7 @@ static void response_put_date(response_t* response)
     
     buffer_print(buffer, "Date: %.3s, %2d %.3s %4d %02d:%02d:%02d GMT" CRLF,
             week_tb[tm->tm_wday], tm->tm_mday, month_tb[tm->tm_mon],
-            tm->tm_year, tm->tm_hour, tm->tm_min, tm->tm_sec);
+            1900 + tm->tm_year, tm->tm_hour, tm->tm_min, tm->tm_sec);
 }
 
 void response_build_err(response_t* response, request_t* request, int err)
