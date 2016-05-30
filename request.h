@@ -13,7 +13,6 @@ typedef struct {
 } header_val_t;
 
 void header_map_init(void);
-void mime_map_init(void);
 
 void request_init(request_t* request);
 void request_clear(request_t* request);

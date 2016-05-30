@@ -5,6 +5,7 @@
 
 #include <stdbool.h>
 
+void mime_map_init(void);
 
 void response_init(response_t* response);
 void response_clear(response_t* response);

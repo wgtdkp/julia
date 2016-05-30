@@ -80,21 +80,6 @@ typedef struct {
     string_t www_authenticate;
 } response_headers_t;
 
-
-
-typedef struct {
-    string_t scheme;
-    string_t host;
-    string_t port;
-    string_t abs_path;
-    string_t extension;
-    string_t query;
-    int nddots;
-    int nentries;
-    int state;
-} uri_t;
-
-
 /*
  * Response
  */
@@ -155,6 +140,18 @@ typedef struct {
     uint16_t major;
     uint16_t minor;
 } version_t;
+
+typedef struct {
+    string_t scheme;
+    string_t host;
+    string_t port;
+    string_t abs_path;
+    string_t extension;
+    string_t query;
+    int nddots;
+    int nentries;
+    int state;
+} uri_t;
 
 typedef struct {
     method_t method;

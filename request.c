@@ -106,30 +106,6 @@ static map_t header_map = {
     .cur = header_map_data + HEADER_MAP_SIZE
 };
 
-
-#define MIME_MAP_SIZE       (131)
-static map_slot_t mime_map_data[2 * MIME_MAP_SIZE];
-
-static map_t mime_map = {
-  .size = MIME_MAP_SIZE,
-  .max_size = 2 * MIME_MAP_SIZE,
-  .data = mime_map_data,
-  .cur = mime_map_data + MIME_MAP_SIZE  
-};
-
-static string_t mime_tb [][2] = {
-    {STRING("htm"),     STRING("text/html")},
-    {STRING("html"),    STRING("text/html")},
-    {STRING("gif"),     STRING("image/gif")},
-    {STRING("ico"),     STRING("image/x-icon")},
-    {STRING("jpeg"),    STRING("image/jpeg")},
-    {STRING("jpg"),     STRING("image/jpeg")},
-    {STRING("svg"),     STRING("image/svg+xml")},
-    {STRING("txt"),     STRING("text/plain")},
-    {STRING("zip"),     STRING("application/zip")},
-    {STRING("css"),     STRING("text/css")},
-};
-
 void header_map_init(void)
 {
     int n = sizeof(header_tb) / sizeof(header_tb[0]);
@@ -137,16 +113,6 @@ void header_map_init(void)
         map_val_t val;
         val.header = header_tb[i].val;
         map_put(&header_map, header_tb[i].name, val);
-    }
-}
-
-void mime_map_init(void)
-{
-    int n = sizeof(mime_tb) / sizeof(mime_tb[0]);
-    for (int i = 0; i < n; i++) {
-        map_val_t val;
-        val.mime = mime_tb[i][1];
-        map_put(&mime_map, mime_tb[i][0], val);
     }
 }
 

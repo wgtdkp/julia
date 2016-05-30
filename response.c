@@ -1,6 +1,7 @@
 #include "response.h"
 
 #include "base/buffer.h"
+#include "base/map.h"
 
 #include "request.h"
 #include "util.h"
@@ -222,11 +223,44 @@ static char err_507_page[] =
     "<center><h1>507 Insufficient Storage</h1></center>" CRLF;
 
 
+#define MIME_MAP_SIZE       (131)
+static map_slot_t mime_map_data[2 * MIME_MAP_SIZE];
+
+static map_t mime_map = {
+  .size = MIME_MAP_SIZE,
+  .max_size = 2 * MIME_MAP_SIZE,
+  .data = mime_map_data,
+  .cur = mime_map_data + MIME_MAP_SIZE  
+};
+
+static string_t mime_tb [][2] = {
+    {STRING("htm"),     STRING("text/html")},
+    {STRING("html"),    STRING("text/html")},
+    {STRING("gif"),     STRING("image/gif")},
+    {STRING("ico"),     STRING("image/x-icon")},
+    {STRING("jpeg"),    STRING("image/jpeg")},
+    {STRING("jpg"),     STRING("image/jpeg")},
+    {STRING("svg"),     STRING("image/svg+xml")},
+    {STRING("txt"),     STRING("text/plain")},
+    {STRING("zip"),     STRING("application/zip")},
+    {STRING("css"),     STRING("text/css")},
+};
+
 static char* err_page(int status, int* len);
 static const string_t status_repr(int status);
 static void response_put_status_line(response_t* response, request_t* request);
 static void response_put_date(response_t* response);
 static int put_response(int fd, response_t* response);
+
+void mime_map_init(void)
+{
+    int n = sizeof(mime_tb) / sizeof(mime_tb[0]);
+    for (int i = 0; i < n; i++) {
+        map_val_t val;
+        val.mime = mime_tb[i][1];
+        map_put(&mime_map, mime_tb[i][0], val);
+    }
+}
 
 void response_init(response_t* response)
 {
@@ -334,9 +368,19 @@ int response_build(response_t* response, request_t* request)
         break;
     }
     
-     buffer_append_cstring(buffer, "Content-Type: text/html" CRLF);
-     buffer_print(buffer, "Content-Length: %d" CRLF,
-            response->resource_stat.st_size);
+    string_t content_type;
+    map_slot_t* slot = map_get(&mime_map, request->uri.extension);
+    if (slot == NULL) {
+        // TODO(wgtdkp): set to default content type
+    } else {
+        content_type = slot->val.mime;
+    }
+    buffer_append_cstring(buffer, "Content-Type: ");
+    buffer_append_string(buffer, content_type);
+    buffer_append_cstring(buffer, CRLF);
+    
+    buffer_print(buffer, "Content-Length: %d" CRLF,
+        response->resource_stat.st_size);
     
     buffer_append_cstring(buffer, CRLF);
     return OK;
