@@ -521,6 +521,9 @@ int request_process_headers(request_t* request, response_t* response)
             if (buffer_size(&request->buffer) == 0
                     && !request->discard_body) {
                 response->status = 100;
+            } else {
+                response_build_err(response, request, 417);
+                return ERR_STATUS(response->status);
             }
         }
     }
@@ -553,8 +556,10 @@ int request_process_headers(request_t* request, response_t* response)
             time_t tm_sec = mktime(&tm);
             if (tm_sec <= response->resource_stat.st_mtime) {
                 // RFC 2616 [14.28]
-                if (response->status / 100 == 2)
-                    response->status = 412;
+                if (response->status / 100 == 2) {
+                    response_build_err(response, request, 417);
+                    return ERR_STATUS(response->status);
+                }
             }
         }
     }

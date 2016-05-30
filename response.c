@@ -310,14 +310,35 @@ int response_build(response_t* response, request_t* request)
     response_put_date(response);
     buffer_append_cstring(buffer, "Server: " SERVER_NAME CRLF);
     
-    // TODO(wgtdkp): scan headers to be sent
+    // TODO(wgtdkp): Cache-control or Exprires
+    switch (response->status) {
+    case 304:
+        // 304 has no body
+        if (response->resource_fd != -1) {
+            close(response->resource_fd);
+            response->resource_fd = -1;
+        }
     
-    // DEBUG: efficiency test
-    buffer_append_cstring(buffer, "Content-Type: text/html" CRLF);
-    buffer_print(buffer, "Content-Length: %d" CRLF,
-                response->resource_stat.st_size);
+        buffer_append_cstring(buffer, CRLF);
+        return OK;
+    case 100:
+        // 100 has no body
+        if (response->resource_fd != -1) {
+            close(response->resource_fd);
+            response->resource_fd = -1;
+        }
+        
+        buffer_append_cstring(buffer, CRLF);
+        return OK;
+    default:
+        break;
+    }
+    
+     buffer_append_cstring(buffer, "Content-Type: text/html" CRLF);
+     buffer_print(buffer, "Content-Length: %d" CRLF,
+            response->resource_stat.st_size);
+    
     buffer_append_cstring(buffer, CRLF);
-    
     return OK;
 }
 

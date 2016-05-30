@@ -109,7 +109,7 @@ typedef struct {
     // discard the request and we thus cannot decide the end
     // of the bad request or the beginning of next request.
     uint8_t keep_alive: 1;
-
+    
     //response_headers_t headers;
     buffer_t buffer;
 
