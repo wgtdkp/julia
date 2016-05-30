@@ -243,8 +243,6 @@ void response_clear(response_t* response)
 {
     if (response->resource_fd != -1)
         close(response->resource_fd);
-
-    response_init(response);
 }
 
 int handle_response(connection_t* connection)
@@ -282,9 +280,12 @@ static int put_response(int fd, response_t* response)
     buffer_t* buffer = &response->buffer;
 
     buffer_send(buffer, fd);
-    if (buffer_size(buffer) == 0) { // All data has been sent
-        // DEBUG: efficiency test
-        // Sendfile
+    
+    // All data in the buffer has been sent
+    if (buffer_size(buffer) == 0
+            && response->resource_fd != -1) {
+        // TODO(wgtdkp): tansform to chunked if the file is too big
+        
         while (1) {
             int len = sendfile(fd, response->resource_fd, NULL,
                     response->resource_stat.st_size);
@@ -316,7 +317,6 @@ int response_build(response_t* response, request_t* request)
     buffer_print(buffer, "Content-Length: %d" CRLF,
                 response->resource_stat.st_size);
     buffer_append_cstring(buffer, CRLF);
-    
     
     return OK;
 }

@@ -147,7 +147,7 @@ void mime_map_init(void)
         map_val_t val;
         val.mime = mime_tb[i][1];
         map_put(&mime_map, mime_tb[i][0], val);
-    }    
+    }
 }
 
 static inline void uri_init(uri_t* uri)
@@ -180,7 +180,7 @@ void request_init(request_t* request)
     request->port_n = 80;
     
     request->stage = RS_REQUEST_LINE;
-    request->state = 0; // RL_S_BEGIN
+    request->state = RL_S_BEGIN; 
     request->keep_alive = false;
     request->t_encoding = TE_IDENTITY;
     request->content_length_n = -1;
