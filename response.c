@@ -341,19 +341,8 @@ static void response_put_date(response_t* response)
     
     time_t t = time(NULL);
     struct tm* tm = localtime(&t);
-    
-    static const char* week_tb[] = {
-        "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat",
-    };
-    
-    static const char* month_tb[] = {
-        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-    };
-    
-    buffer_print(buffer, "Date: %.3s, %2d %.3s %4d %02d:%02d:%02d GMT" CRLF,
-            week_tb[tm->tm_wday], tm->tm_mday, month_tb[tm->tm_mon],
-            1900 + tm->tm_year, tm->tm_hour, tm->tm_min, tm->tm_sec);
+    buffer->end += strftime(buffer->end, buffer->limit - buffer->end,
+            "Date: %a, %d %b %Y %H:%M:%S GMT" CRLF, tm);
 }
 
 void response_build_err(response_t* response, request_t* request, int err)
@@ -367,7 +356,6 @@ void response_build_err(response_t* response, request_t* request, int err)
     response_put_status_line(response, request);
     response_put_date(response);
     buffer_append_cstring(buffer, "Server: " SERVER_NAME CRLF);
-   
    
     if (request->keep_alive) {
         buffer_append_cstring(buffer, "Connection: keep-alive" CRLF);
