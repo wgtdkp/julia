@@ -1,0 +1,9 @@
+{
+    /* 
+     * If a directive is specified more than once,
+     * the first one will be active.
+     */
+    "host": "localhost",
+    "port": 8008,
+    "doc_root": "/var/www/html"
+}

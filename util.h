@@ -38,6 +38,7 @@ static inline int max(int x, int y)
     return x > y ? x: y;
 }
 
+void ju_error(const char* format, ...);
 void ju_log(const char* format, ...);
 
 #endif

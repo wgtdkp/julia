@@ -2,6 +2,7 @@
 
 #include "base/map.h"
 
+#include "config.h"
 #include "connection.h"
 #include "parse.h"
 #include "request.h"
@@ -14,6 +15,7 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include <sched.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -45,7 +47,7 @@ int max_connection = 0;
 int max_response = 0;
 
 static int startup(unsigned short port);
-static int server_init(const char* doc_root);
+static int server_init(char* cfg_file);
 static void usage(void);
 
 static void sig_int(int signo)
@@ -61,7 +63,7 @@ static void sig_int(int signo)
     exit(0);
 }
 
-static int startup(unsigned short port)
+static int startup(uint16_t port)
 {
     // If the client closed the connection, then it will cause SIGPIPE
     // Here simplely ignore this SIG
@@ -99,11 +101,15 @@ static int startup(unsigned short port)
     return listen_fd;
 }
 
-static int server_init(const char* doc_root)
+static int server_init(char* cfg_file)
 {
     // Set limits
     struct rlimit nofile_limit = {65535, 65535};
     setrlimit(RLIMIT_NOFILE, &nofile_limit);
+    
+    // Config init
+    if (config_load(&server_cfg, cfg_file) != OK)
+        return ERROR;
     
     parse_init();
     header_map_init();
@@ -117,7 +123,7 @@ static int server_init(const char* doc_root)
     epoll_fd = epoll_create1(0);
     EXIT_ON(epoll_fd == -1, "epoll_create1");
 
-    doc_root_fd = open(doc_root, O_RDONLY);
+    doc_root_fd = open(server_cfg.doc_root.data, O_RDONLY);
     EXIT_ON(doc_root_fd == -1, "open(doc_root)");
     
     return OK;
@@ -131,13 +137,10 @@ static void usage(void)
 
 int main(int argc, char* argv[])
 {
-    if (argc < 3) {
+    if (argc < 2) {
         usage();
         exit(-1);
     }
-
-    int listen_fd = -1;
-    unsigned short port = atoi(argv[1]);
 
 #ifdef REUSE_PORT
 #define NCORES  (8)
@@ -161,19 +164,21 @@ int main(int argc, char* argv[])
     }
 
 work:
-#endif
+#endif    
+    int listen_fd = -1;
 
-    listen_fd = startup(port);
+    if (server_init(argv[1]) != OK)
+        return -1;
+    
+    listen_fd = startup(server_cfg.port);
     if (listen_fd < 0) {
         fprintf(stderr, "startup server failed\n");
         exit(-1);
     }
 
-    server_init(argv[2]);
-    
     printf("julia started...\n");
-    printf("listening at port: %d\n", port);
-    printf("doc root: %s\n", argv[2]);
+    printf("listening at port: %u\n", server_cfg.port);
+    print_string("doc root: %*s\n", server_cfg.doc_root);
     fflush(stdout);
 
     assert(add_listener(&listen_fd) != -1);

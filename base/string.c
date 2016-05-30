@@ -58,7 +58,7 @@ bool string_eq(string_t* lhs, string_t* rhs)
     if (lhs->len != rhs->len)
         return false;
         
-    for (int i; i < lhs->len; i++) {
+    for (int i = 0; i < lhs->len; i++) {
         if (lhs->data[i] != rhs->data[i])
             return false;
     }

@@ -5,6 +5,17 @@
 #include <stdlib.h>
 #include <time.h>
 
+void ju_error(const char* format, ...)
+{
+    fprintf(stderr, "error: ");
+    
+    va_list args;
+    va_start(args, format);
+    vfprintf(stderr, format, args);
+    va_end(args);
+    
+    fprintf(stderr, "\n");
+}
 
 void ju_log(const char* format, ...)
 {

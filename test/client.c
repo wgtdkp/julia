@@ -1,8 +1,3 @@
-#define _BSD_SOURCE
-
-
-#include <stdio.h>
-#include <stdlib.h>
 #include <sys/epoll.h>
 #include <sys/mman.h>
 #include <sys/socket.h>
@@ -19,6 +14,9 @@
 #include <ctype.h>
 #include <assert.h>
 #include <stdarg.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <strings.h>
 #include <time.h>
@@ -31,7 +29,7 @@ do {                        \
 
 
 
-int startup(unsigned short port)
+int startup(uint16_t port)
 {
     static const char* host = "127.0.0.1";
     int fd = socket(AF_INET, SOCK_STREAM, 0);
