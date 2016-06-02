@@ -24,7 +24,8 @@ int buffer_recv(buffer_t* buffer, int fd)
         if (len == -1) {
             if (errno == EAGAIN)
                 break;
-            EXIT_ON(1, "recv");
+            //EXIT_ON(1, "recv");
+            perror("recv");
             return ERR_INTERNAL_ERROR;
         }
         readed += len;

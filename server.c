@@ -117,7 +117,7 @@ static int server_init(char* cfg_file)
     
     pool_init(&connection_pool, sizeof(connection_t), 8, 0);
     pool_init(&response_pool, QUEUE_WIDTH(response_t), 8, 0);
-    pool_init(&accept_pool, LIST_WIDTH(accept_type_t), 4, 0);
+    //pool_init(&accept_pool, LIST_WIDTH(accept_type_t), 4, 0);
     
     
     epoll_fd = epoll_create1(0);
@@ -227,7 +227,6 @@ work:
             // TODO(wgtdkp): checking errors?
             if (events[i].events & EPOLLOUT) {
                 // Send response
-                assert(0);
                 connection_t* connection = (connection_t*)(events[i].data.ptr);
                 handle_response(connection);
             }

@@ -46,7 +46,6 @@ static inline void list_clear(list_t* list)
     while (list_head(list) != NULL) {
         list_delete(list, list_head(list));
     }
-    pool_clear(list->pool);
 }
 
 static inline list_node_t* list_alloc(list_t* list)

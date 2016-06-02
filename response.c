@@ -289,7 +289,7 @@ int handle_response(connection_t* connection)
             connection_disable_out(connection);
             return OK;
         }
-        
+
         int close = !response->keep_alive;
         if (put_response(connection->fd, response) == AGAIN) {
             // Response(s) not completely sent
@@ -321,6 +321,7 @@ static int put_response(int fd, response_t* response)
         // TODO(wgtdkp): tansform to chunked if the file is too big
         
         while (1) {
+            // ERROR: Blocked
             int len = sendfile(fd, response->resource_fd, NULL,
                     response->resource_stat.st_size);
             if (len == 0) {
@@ -331,7 +332,7 @@ static int put_response(int fd, response_t* response)
                     return AGAIN;
                 EXIT_ON(1, "sendfile");
             }
-        }
+        }               
     }
     return AGAIN;
 }

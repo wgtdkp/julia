@@ -7,7 +7,7 @@ SRCS = base/buffer.c base/list.c\
 	   	config.c connection.c juson.c parse.c\
 		request.c response.c server.c util.c
 		 
-CFLAGS = -O2 -g -std=c11 -Wall -D_XOPEN_SOURCE -D_GNU_SOURCE -I./
+CFLAGS = -g -std=c11 -Wall -D_XOPEN_SOURCE -D_GNU_SOURCE -I./
 
 OBJS_DIR = build/
 OBJS = $(SRCS:.c=.o)

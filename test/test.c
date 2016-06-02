@@ -9,6 +9,7 @@
 
 int arr[101];
 
+/*
 int test_vector(void)
 {
     for (int i = 0; i < 101; i++) {
@@ -45,7 +46,7 @@ int test_vector(void)
     printf("vec.data: %p\n", vec.data);
     return 0;
 }
-
+*/
 int test_pool(void)
 {
     pool_t pool;
@@ -59,28 +60,31 @@ int test_pool(void)
         arr[i] = ele;
     }
 
-    printf("pool.nallocated: %d\n", pool.nallocated);
-    printf("chunck number: %d\n", pool.chunks.size);
+    //printf("pool.nallocated: %d\n", pool.nallocated);
+    //printf("chunck number: %d\n", pool.chunks.size);
 
     for (int i = 0; i < 101; i++) {
         pool_free(&pool, arr[i]);
     }
     
-    printf("pool.nallocated: %d\n", pool.nallocated);
-    printf("chunck number: %d\n", pool.chunks.size);
+    //printf("pool.nallocated: %d\n", pool.nallocated);
+    //printf("chunck number: %d\n", pool.chunks.size);
 
     pool_clear(&pool);
     
-    printf("pool.nallocated: %d\n", pool.nallocated);
-    printf("chunck number: %d\n", pool.chunks.size);
+    //printf("pool.nallocated: %d\n", pool.nallocated);
+    //printf("chunck number: %d\n", pool.chunks.size);
 
     return 0;
 }
 
+
 int test_list(void)
 {
     list_t list;
-    list_init(&list, sizeof(int), 100, 0);
+    pool_t pool;
+    pool_init(&pool, LIST_WIDTH(int), 100, 0);
+    list_init(&list, &pool);
     
     for (int i = 0; i < 101; i++) {
         arr[i] = i;
@@ -100,7 +104,7 @@ int test_list(void)
     }
     
     printf("list size: %d\n", list.size);
-    printf("pool allocated: %d\n", list.pool.nallocated);
+    printf("pool allocated: %d\n", list.pool->nallocated);
     
     list_delete(&list, list_head(&list)->next->next);
     list_delete(&list, list_tail(&list)->prev->prev);
@@ -113,46 +117,50 @@ int test_list(void)
     list_clear(&list);
     
     printf("list size: %d\n", list.size);
-    printf("pool allocated: %d\n", list.pool.nallocated);
+    printf("pool allocated: %d\n", list.pool->nallocated);
     printf("list head: %p \n", list_head(&list));
     printf("list tail: %p \n", list_tail(&list));
     
     list_clear(&list);
     
     printf("list size: %d\n", list.size);
-    printf("pool allocated: %d\n", list.pool.nallocated);
+    printf("pool allocated: %d\n", list.pool->nallocated);
     printf("list head: %p \n", list_head(&list));
     printf("list tail: %p \n", list_tail(&list));
     
     return 0;
 }
 
+
+
 int test_queue(void)
 {
     queue_t queue;
-    queue_init(&queue, sizeof(int), 100, 0);
+    pool_t pool;
+    pool_init(&pool, QUEUE_WIDTH(int), 100, 0);
+    queue_init(&queue, &pool);
     
     for (int i = 0; i < 101; i++) {
         arr[i] = i;
     }
     
     for (int i = 0; i < 101; i++) {
-        queue_node_t* new_node = queue_alloc(&queue);
-        *(int*)&new_node->data = arr[i];
-        queue_push(&queue, new_node);
+        int* ele = queue_alloc(&queue);
+        *ele = arr[i];
+        queue_push(&queue, ele);
     }
     
-    while (!queue_empty(&queue)) {
-        int* ele = queue_front(&queue);
-        printf("ele: %d\n", *ele);
-        queue_pop(&queue);
-    }
+    //while (!queue_empty(&queue)) {
+    //    int* ele = queue_front(&queue);
+    //    //printf("ele: %d\n", *ele);
+    //    queue_pop(&queue);
+    //}
     
-    printf("queue size: %d\n", queue_size(&queue));
+    //printf("queue size: %d\n", queue_size(&queue));
     
     queue_clear(&queue);
     
-    printf("queue size: %d\n", queue_size(&queue));
+    //printf("queue size: %d\n", queue_size(&queue));
     
     return 0;
 }
@@ -161,8 +169,10 @@ int test_queue(void)
 int main(void)
 {
     //test_vector();
-    //test_pool();
+    //while (1)
+    //    test_pool();
     //test_list();
-    test_queue();
+    while (1)
+        test_queue();
     return 0;
 }

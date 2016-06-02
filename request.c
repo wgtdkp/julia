@@ -445,7 +445,7 @@ static int header_handle_accept(
 {
     header_handle_generic(request, offset, response);
     
-    parse_header_accept(request);
+    //parse_header_accept(request);
     return OK;
 }
 

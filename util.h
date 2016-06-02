@@ -23,9 +23,10 @@
 
 #define EXIT_ON(cond, msg)  \
 do {                        \
-    if (cond)               \
+    if (cond) {             \
         perror(msg);        \
-    exit(-1);               \
+        exit(-1);           \
+    }                       \
 } while (0)
 
 
