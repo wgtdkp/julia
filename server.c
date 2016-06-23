@@ -132,7 +132,7 @@ static int server_init(char* cfg_file)
 static void usage(void)
 {
     fprintf(stderr, "Usage:\n"
-                    "    julia port www_dir\n");
+                    "    julia config_file\n");
 }
 
 int main(int argc, char* argv[])
