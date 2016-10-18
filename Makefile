@@ -7,16 +7,16 @@ SRCS = base/buffer.c base/list.c\
 	   	config.c connection.c juson.c parse.c\
 		request.c response.c server.c util.c
 		 
-CFLAGS = -g -std=c11 -Wall -D_XOPEN_SOURCE -D_GNU_SOURCE -I./
+CFLAGS = -std=c11 -Wall -D_XOPEN_SOURCE -D_GNU_SOURCE -I./
 
 OBJS_DIR = build/
-OBJS = $(SRCS:.c=.o)
+OBJS = $(SRCS:.c=.s)
 
 $(TARGET): $(OBJS)
-	$(CC) -o $@ $^
+	gcc -o $@ $^
 
-%.o: %.c
-	$(CC) $(CFLAGS) -o $@ -c $<
+%.s: %.c
+	$(CC) $(CFLAGS) -o $@ -S $<
 
 .PHONY: clean
 
