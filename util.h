@@ -25,7 +25,7 @@
 do {                        \
     if (cond) {             \
         perror(msg);        \
-        exit(-1);           \
+        abort();            \
     }                       \
 } while (0)
 
