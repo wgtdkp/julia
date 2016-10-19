@@ -18,9 +18,9 @@ if ((cond)) {                       \
     return ERROR;                   \
 };
 
-static inline string_t juson_val2str(juson_value_t* val)
+static inline const string_t juson_val2str(juson_value_t* val)
 {
-    return (string_t){val->sdata, val->len};
+    return (const string_t){(char*)val->sdata, val->len};
 }
 
 // Append null terminal at the end
@@ -37,13 +37,13 @@ int config_load(config_t* cfg, char* file_name)
     size_t len = 0;
     
     juson_doc_t json;
-    json.mem = juson_load(file_name);
-    if (json.mem == NULL) {
+    char* text = juson_load(file_name);
+    if (text == NULL) {
         ju_error("load file '%s' failed", file_name);
         return ERROR;
     }
     
-    juson_value_t* root = juson_parse(&json);
+    juson_value_t* root = juson_parse(&json, text);
     ERR_ON(root == NULL || root->t != JUSON_OBJECT, "bad format");
     
     juson_value_t* host_val = juson_object_get(root, "host");
@@ -53,7 +53,7 @@ int config_load(config_t* cfg, char* file_name)
     len += cfg->host.len;
     
     juson_value_t* port_val = juson_object_get(root, "port");
-    if (port_val == NULL || port_val->t != JUSON_INT) {
+    if (port_val == NULL || port_val->t != JUSON_INTEGER) {
         cfg->port = 80;
     } else {
         cfg->port = port_val->ival;
