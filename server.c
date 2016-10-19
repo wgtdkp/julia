@@ -40,7 +40,7 @@
 #define DEBUG(msg)  fprintf(stderr, "%s\n", (msg));
 
 int doc_root_fd;
-
+static pid_t worker_pid;
 // DEBUG:
 clock_t total = 0;
 int total_reqs = 0;
@@ -60,6 +60,9 @@ static void sig_int(int signo)
     printf("max connection allocated: %d\n", max_connection);
     printf("response pool allocated: %d\n", response_pool.nallocated);
     printf("max response allocated: %d\n", max_response);
+    fflush(stdout);
+    if (worker_pid != getpid())
+        kill(worker_pid, SIGKILL);
     exit(0);
 }
 
@@ -141,12 +144,13 @@ int main(int argc, char* argv[])
         usage();
         exit(-1);
     }
+    worker_pid = getpid();
 
 #ifdef REUSE_PORT
 #define NCORES  (8)
     int workers[NCORES];
     for (int i = 0; i < NCORES - 1; i++) {
-        int pid = fork();
+        pid_t pid = fork();
         if (pid == 0) {
             goto work;
         } else {
@@ -160,11 +164,25 @@ int main(int argc, char* argv[])
         CPU_SET(i, &mask);
         sched_setaffinity(workers[i], sizeof(cpu_set_t), &mask);
         //sched_getaffinity(NCORES[i], sizeof(cpu_set_t), &mask);
-        
     }
-
 work:
-#endif    
+#else
+    while (1) {
+        int stat;
+        worker_pid = fork();
+        if (worker_pid < 0)
+            perror("fork");
+        else if (worker_pid != 0) {
+            printf("worker_pid: %d\n", worker_pid);
+            fflush(stdout);
+            wait(&stat);
+            if (WIFEXITED(stat))
+                break;  
+        } else {
+            break;
+        }
+    }
+#endif
     int listen_fd = -1;
 
     if (server_init(argv[1]) != OK)
