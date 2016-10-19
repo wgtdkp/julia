@@ -42,7 +42,7 @@ static inline char* string_end(string_t* str)
 }
 
 int print_string(const char* format, ...);
-int string_cmp(string_t* lhs, string_t* rhs);
-bool string_eq(string_t* lhs, string_t* rhs);
+int string_cmp(const string_t* lhs, const string_t* rhs);
+bool string_eq(const string_t* lhs, const string_t* rhs);
 
 #endif

@@ -6,7 +6,7 @@
 #include <stdarg.h>
 #include <assert.h>
 
-// '%*s' <- string_t 
+// '%*s' <- string_t*
 int print_string(const char* format, ...)
 {
     int ret = 0;
@@ -15,9 +15,9 @@ int print_string(const char* format, ...)
     const char* p;
     for (p = format; p[0] != 0; p++) {
         if (p[0] == '%' && p[1] == '*' && (p[2] == 's' || p[2] == 'S')) {
-            string_t str = va_arg(args, string_t);
-            for (int i = 0; i < str.len; i++)
-                ret += printf("%c", str.data[i]);
+            string_t* str = va_arg(args, string_t*);
+            for (int i = 0; i < str->len; i++)
+                ret += printf("%c", str->data[i]);
             p += 2;
         } else {
             ret += printf("%c", p[0]);
@@ -27,7 +27,7 @@ int print_string(const char* format, ...)
     return ret;
 }
 
-int string_cmp(string_t* lhs, string_t* rhs)
+int string_cmp(const string_t* lhs, const string_t* rhs)
 {
     if (lhs->data == rhs->data && lhs->len == rhs->len)
         return 0;
@@ -49,7 +49,7 @@ int string_cmp(string_t* lhs, string_t* rhs)
     return (i == lhs->len) ? -1: 1;
 }
 
-bool string_eq(string_t* lhs, string_t* rhs)
+bool string_eq(const string_t* lhs, const string_t* rhs)
 {
     if (lhs->data == NULL && rhs->data == NULL)
         return true;

@@ -54,11 +54,12 @@ int buffer_send(buffer_t* buffer, int fd)
     return sent;
 }
 
-int buffer_append_string(buffer_t* buffer, const string_t str)
+int buffer_append_string(buffer_t* buffer, const string_t* str)
 {
     int margin = buffer->limit - buffer->end;
-    int appended = min(margin, str.len);
-    memcpy(buffer->end, str.data, appended);
+    assert(margin > 0);
+    int appended = min(margin, str->len);
+    memcpy(buffer->end, str->data, appended);
     buffer->end += appended;
     return appended;
 }
@@ -68,6 +69,7 @@ int buffer_print(buffer_t* buffer, const char* format, ...)
     va_list args;
     va_start (args, format);
     int margin = buffer->limit - buffer->end;
+    assert(margin > 0);
     int len = vsnprintf(buffer->end, margin, format, args);
     buffer->end += len;
     va_end (args);

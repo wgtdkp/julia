@@ -258,7 +258,7 @@ void mime_map_init(void)
     for (int i = 0; i < n; i++) {
         map_val_t val;
         val.mime = mime_tb[i][1];
-        map_put(&mime_map, mime_tb[i][0], val);
+        map_put(&mime_map, &mime_tb[i][0], &val);
     }
 }
 
@@ -369,15 +369,13 @@ int response_build(response_t* response, request_t* request)
         break;
     }
     
-    string_t content_type;
-    map_slot_t* slot = map_get(&mime_map, request->uri.extension);
-    if (slot == NULL) {
-        // TODO(wgtdkp): set to default content type
-    } else {
+    string_t content_type = STRING("text/html");
+    map_slot_t* slot = map_get(&mime_map, &request->uri.extension);
+    if (slot) {
         content_type = slot->val.mime;
     }
     buffer_append_cstring(buffer, "Content-Type: ");
-    buffer_append_string(buffer, content_type);
+    buffer_append_string(buffer, &content_type);
     buffer_append_cstring(buffer, CRLF);
     
     buffer_print(buffer, "Content-Length: %d" CRLF,
@@ -396,8 +394,9 @@ static void response_put_status_line(response_t* response, request_t* request)
     else
         version = STRING("HTTP/1.0 ");
     
-    buffer_append_string(buffer, version);
-    buffer_append_string(buffer, status_repr(response->status));
+    buffer_append_string(buffer, &version);
+    string_t status = status_repr(response->status);
+    buffer_append_string(buffer, &status);
     buffer_append_cstring(buffer, CRLF);
 }
 
@@ -442,9 +441,10 @@ void response_build_err(response_t* response, request_t* request, int err)
     assert(appended == strlen(CRLF));
     
     if (page != NULL) {
-        buffer_append_string(buffer, string_setto(page, page_len));
+        
+        buffer_append_string(buffer, &(string_t){page, page_len});
         appended = buffer_append_string(buffer,
-                string_setto(err_page_tail, page_tail_len));
+                &(string_t){err_page_tail, page_tail_len});
         assert(appended == page_tail_len);
     }
 }

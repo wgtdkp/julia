@@ -40,7 +40,7 @@ typedef struct {
     map_slot_t* cur;
 } map_t;
 
-map_slot_t* map_get(map_t* map, map_key_t key);
-void map_put(map_t* map, string_t key, map_val_t val);
+map_slot_t* map_get(map_t* map, const map_key_t* key);
+void map_put(map_t* map, const string_t* key, const map_val_t* val);
 
 #endif

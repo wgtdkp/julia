@@ -857,8 +857,8 @@ int parse_header_accept(request_t* request)
     list_node_t* p = list_head(accept_list);
     while (p != NULL) {
         accept_type_t* ac = (accept_type_t*)&p->data;
-        print_string("type: %*s\n", ac->type);
-        print_string("subtype: %*s\n", ac->subtype);
+        print_string("type: %*s\n", &ac->type);
+        print_string("subtype: %*s\n", &ac->subtype);
         printf("q: %f\n", ac->q);
         p = p->next;
     }

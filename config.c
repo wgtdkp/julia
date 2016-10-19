@@ -2,7 +2,7 @@
 
 #include "base/string.h"
 
-#include "juson.h"
+#include "juson/juson.h"
 #include "util.h"
 
 config_t server_cfg;

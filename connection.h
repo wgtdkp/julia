@@ -6,6 +6,7 @@
 #include "base/queue.h"
 #include "base/string.h"
 
+#include "event.h"
 #include "server.h"
 
 #include <sys/epoll.h>
@@ -14,9 +15,8 @@
 #include <stdint.h>
 
 
-
 extern int epoll_fd;
-extern struct epoll_event events[MAX_EVENT_NUM];
+extern julia_epoll_event_t events[MAX_EVENT_NUM];
 extern pool_t connection_pool;
 extern pool_t response_pool;
 extern pool_t accept_pool;
@@ -192,7 +192,7 @@ typedef struct {
  */
  typedef struct {
     int fd; // socket fd
-    struct epoll_event event;
+    julia_epoll_event_t event;
 
     request_t request;
     queue_t response_queue;

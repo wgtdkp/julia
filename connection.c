@@ -11,7 +11,7 @@
 #include <unistd.h>
 
 int epoll_fd;
-struct epoll_event events[MAX_EVENT_NUM];
+julia_epoll_event_t events[MAX_EVENT_NUM];
 pool_t connection_pool;
 pool_t response_pool;
 pool_t accept_pool;
@@ -51,7 +51,7 @@ void close_connection(connection_t* connection)
 
 int add_listener(int* listen_fd)
 {
-    struct epoll_event ev;
+    julia_epoll_event_t ev;
     set_nonblocking(*listen_fd);
     ev.events = EVENTS_IN;
     ev.data.ptr = listen_fd;

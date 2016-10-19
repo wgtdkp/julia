@@ -4,7 +4,7 @@
      * the first one will be active.
      */
     "host": "localhost",
-    "port": 8008,
+    "port": 8080,
     "doc_root": "/var/www/html",
     "dynamic": {
         "php": {

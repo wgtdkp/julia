@@ -54,9 +54,9 @@ static inline void buffer_discard_parsed(buffer_t* buffer)
 
 int buffer_recv(buffer_t* buffer, int fd);
 int buffer_send(buffer_t* buffer, int fd);
-int buffer_append_string(buffer_t* buffer, const string_t str);
+int buffer_append_string(buffer_t* buffer, const string_t* str);
 int buffer_print(buffer_t* buffer, const char* format, ...);
 
-#define buffer_append_cstring(buffer, cstr) buffer_append_string(buffer, STRING(cstr))
+#define buffer_append_cstring(buffer, cstr) buffer_append_string(buffer, &STRING(cstr))
 
 #endif

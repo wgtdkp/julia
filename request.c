@@ -112,7 +112,7 @@ void header_map_init(void)
     for (int i = 0; i < n; i++) {
         map_val_t val;
         val.header = header_tb[i].val;
-        map_put(&header_map, header_tb[i].name, val);
+        map_put(&header_map, &header_tb[i].name, &val);
     }
 }
 
@@ -184,14 +184,12 @@ int handle_request(connection_t* connection)
     // Client closed the connection
     if (readed <= 0) {
         readed = -readed;
-        //printf("connection closed by the client side\n");
-        //fflush(stdout);
         close_connection(connection);
         return OK;
     }
 
     //if (buffer_size(buffer) > 0)
-    //    print_string("%*s", (string_t){buffer->begin, buffer->end});
+    //    print_string("%*s", &(string_t){buffer->begin, buffer->end});
 
     if (err == OK && request->stage == RS_REQUEST_LINE) {
         err = request_handle_request_line(request, request->response);
@@ -311,7 +309,7 @@ static int request_handle_headers(request_t* request, response_t* response)
             goto done;
         case OK:
             {
-                map_slot_t* slot = map_get(&header_map, request->header_name);
+                map_slot_t* slot = map_get(&header_map, &request->header_name);
                 if (slot == NULL)
                     break;
                 header_val_t header = slot->val.header;

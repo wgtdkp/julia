@@ -15,6 +15,7 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include <sched.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -53,7 +54,6 @@ static void usage(void);
 static void sig_int(int signo)
 {
     float total_time = 1.0f * total / CLOCKS_PER_SEC;
-    // TODO(wgtdkp): print statistic info.
     printf("[%d]: time: %f, total reqs: %d, RPS: %f\n",
             getpid(), total_time, total_reqs, total_reqs / total_time);
     printf("connection pool allocated: %d\n", connection_pool.nallocated);
@@ -178,7 +178,7 @@ work:
 
     printf("julia started...\n");
     printf("listening at port: %u\n", server_cfg.port);
-    print_string("doc root: %*s\n", server_cfg.doc_root);
+    print_string("doc root: %*s\n", &server_cfg.doc_root);
     fflush(stdout);
 
     assert(add_listener(&listen_fd) != -1);
