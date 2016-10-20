@@ -1,3 +1,0 @@
-<h2> 
-    document is on the way...
-</h2>
