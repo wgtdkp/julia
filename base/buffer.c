@@ -24,7 +24,6 @@ int buffer_recv(buffer_t* buffer, int fd)
         if (len == -1) {
             if (errno == EAGAIN)
                 break;
-            //EXIT_ON(1, "recv");
             perror("recv");
             return ERR_INTERNAL_ERROR;
         }
@@ -45,7 +44,7 @@ int buffer_send(buffer_t* buffer, int fd)
             else if (errno == EPIPE) {
                 // TODO(wgtdkp): the connection is broken
             }
-            EXIT_ON(1, "send");
+            perror("send");
             return ERR_INTERNAL_ERROR;
         }
         sent += len;

@@ -332,7 +332,7 @@ static int put_response(int fd, response_t* response)
                     return AGAIN;
                 EXIT_ON(1, "sendfile");
             }
-        }               
+        }
     }
     return AGAIN;
 }

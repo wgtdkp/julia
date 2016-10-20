@@ -199,7 +199,6 @@ work:
         int nfds = epoll_wait(epoll_fd, events, MAX_EVENT_NUM, 3000);
         if (nfds == -1) {
             EXIT_ON(errno != EINTR, "epoll_wait");
-            continue;
         }
         
         clock_t begin = clock();
@@ -217,7 +216,7 @@ work:
                     if (connection_fd == -1) {
                         // TODO(wgtdkp): handle this error
                         // There could be too many connections(beyond OPEN_MAX)
-                        EXIT_ON((errno != EWOULDBLOCK), "accept");
+                        ERR_ON((errno != EWOULDBLOCK), "accept");
                         break;
                     }
                     connection_t* connection =

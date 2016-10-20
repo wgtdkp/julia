@@ -29,6 +29,13 @@ do {                        \
     }                       \
 } while (0)
 
+#define ERR_ON(cond, msg)   \
+do {                        \
+    if (cond) {             \
+        perror(msg);        \
+    }                       \
+} while (0)
+
 
 static inline int min(int x, int y)
 {

@@ -21,12 +21,12 @@
 #include <strings.h>
 #include <time.h>
 
-#define EXIT_ON(cond, msg)  \
-do {                        \
-    if (cond)               \
-        perror(msg);        \
-} while (0)
-
+#define EXIT_ON(cond, msg) {    \
+    if (cond) {                 \
+        perror(msg);            \
+        abort();                \
+    }                           \
+};
 
 
 int startup(uint16_t port)
