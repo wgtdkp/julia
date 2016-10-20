@@ -42,10 +42,10 @@ connection_t* open_connection(int fd, pool_t* pool)
 
 void close_connection(connection_t* connection)
 {
-    close(connection->fd);  // The events automatically removed
+    // The events automatically removed
+    close(connection->fd);
     // The order cannot be reversed
     queue_clear(&connection->response_queue);
-    
     pool_free(connection->pool, connection);
 }
 

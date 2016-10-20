@@ -248,6 +248,7 @@ static int request_handle_uri(request_t* request, response_t* response)
     struct stat* stat = &response->resource_stat;
     fstat(fd, stat);
     if (S_ISDIR(stat->st_mode)) {
+        close(fd); // FUCK ME !!!
         fd = openat(fd, "index.html", O_RDONLY);
         if (fd == -1) {
             response_build_err(response, request, 404);

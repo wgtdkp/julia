@@ -321,7 +321,7 @@ static int put_response(int fd, response_t* response)
         // TODO(wgtdkp): tansform to chunked if the file is too big
         
         while (1) {
-            // ERROR: Blocked
+            // FIXME(wgtdkp): Blocked
             int len = sendfile(fd, response->resource_fd, NULL,
                     response->resource_stat.st_size);
             if (len == 0) {
