@@ -292,14 +292,12 @@ static int request_handle_request_line(
     
     // We still need to receive the left part of this request
     // Thus, the connection will hold
-    request_handle_uri(request, response);
-    return OK;
+    return request_handle_uri(request, response);
 }
 
 static int request_handle_headers(request_t* request, response_t* response)
 {
     int err;
-    
     while (true) {
         err = parse_header_line(request);
         switch (err) {
@@ -307,20 +305,18 @@ static int request_handle_headers(request_t* request, response_t* response)
             return AGAIN;
         case EMPTY_LINE:
             goto done;
-        case OK:
-            {
-                map_slot_t* slot = map_get(&header_map, &request->header_name);
-                if (slot == NULL)
-                    break;
-                header_val_t header = slot->val.header;
-                if (header.offset != -1) {
-                    int err = header.processor(request,
-                            header.offset, response);
-                    if (err != 0)
-                        return err; 
-                }
+        case OK: {
+            map_slot_t* slot = map_get(&header_map, &request->header_name);
+            if (slot == NULL)
+                break;
+            header_val_t header = slot->val.header;
+            if (header.offset != -1) {
+                int err = header.processor(request,
+                        header.offset, response);
+                if (err != 0)
+                    return err; 
             }
-            break; 
+        } break; 
         default:
             assert(0);
         }
@@ -328,7 +324,6 @@ static int request_handle_headers(request_t* request, response_t* response)
     
 done:
     err = request_process_headers(request, response);
-    
     request->stage = RS_BODY;
     return err;
 }
@@ -340,7 +335,6 @@ static int header_handle_connection(
     request_headers_t* headers = &request->headers;
     if(strncasecmp("close", headers->connection.data, 5) == 0)
         request->keep_alive = 0;
-    
     return OK;
 }
 

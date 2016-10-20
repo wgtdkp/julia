@@ -37,15 +37,12 @@
 #include <netinet/tcp.h>
 
 
-#define DEBUG(msg)  fprintf(stderr, "%s\n", (msg));
-
 int doc_root_fd;
 static pid_t worker_pid;
-// DEBUG:
-clock_t total = 0;
-int total_reqs = 0;
-int max_connection = 0;
-int max_response = 0;
+static clock_t total = 0;
+static int total_reqs = 0;
+static int max_connection = 0;
+static int max_response = 0;
 
 static int startup(unsigned short port);
 static int server_init(char* cfg_file);
@@ -166,18 +163,16 @@ int main(int argc, char* argv[])
         //sched_getaffinity(NCORES[i], sizeof(cpu_set_t), &mask);
     }
 work:
-#else
+#elif !defined DEBUG
     while (1) {
         int stat;
         worker_pid = fork();
         if (worker_pid < 0)
             perror("fork");
-        else if (worker_pid != 0) {
-            printf("worker_pid: %d\n", worker_pid);
-            fflush(stdout);
+        else if (worker_pid > 0) {
             wait(&stat);
             if (WIFEXITED(stat))
-                break;  
+                exit(-1);
         } else {
             break;
         }

@@ -761,7 +761,6 @@ int parse_header_line(request_t* request)
     return AGAIN;
 
 header_done:
-    // DEBUG:
     buffer->begin = p + 1;
     request->state = HL_S_BEGIN;
     
