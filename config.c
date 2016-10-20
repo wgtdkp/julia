@@ -12,7 +12,7 @@ config_t server_cfg;
  */
 
 
-#define ERR_ON(cond, msg)           \
+#define CFG_ERR_ON(cond, msg)           \
 if ((cond)) {                       \
     ju_error("config file: "msg);   \
     return ERROR;                   \
@@ -44,10 +44,10 @@ int config_load(config_t* cfg, char* file_name)
     }
     
     juson_value_t* root = juson_parse(&json, text);
-    ERR_ON(root == NULL || root->t != JUSON_OBJECT, "bad format");
+    CFG_ERR_ON(root == NULL || root->t != JUSON_OBJECT, "bad format");
     
     juson_value_t* host_val = juson_object_get(root, "host");
-    ERR_ON(host_val == NULL || host_val->t != JUSON_STRING,
+    CFG_ERR_ON(host_val == NULL || host_val->t != JUSON_STRING,
             "host not specified");
     cfg->host = juson_val2str(host_val);
     len += cfg->host.len;
@@ -60,13 +60,13 @@ int config_load(config_t* cfg, char* file_name)
     }
     
     juson_value_t* doc_root_val = juson_object_get(root, "doc_root");
-    ERR_ON(doc_root_val == NULL || doc_root_val->t != JUSON_STRING,
+    CFG_ERR_ON(doc_root_val == NULL || doc_root_val->t != JUSON_STRING,
             "doc root not specified");
     cfg->doc_root = juson_val2str(doc_root_val);
     len += cfg->doc_root.len;
     
     cfg->data = malloc(len);
-    ERR_ON(cfg->data == NULL, "no memory");
+    CFG_ERR_ON(cfg->data == NULL, "no memory");
     
     len = 0;
     len += move_string(cfg->data + len, &cfg->host);

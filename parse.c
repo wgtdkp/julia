@@ -23,7 +23,7 @@
 #define STR6_EQ(p, q)   (STR3_EQ(p, q) && STR3_EQ(p + 3, q + 3))
 #define STR7_EQ(p, q)   (STR3_EQ(p, q) && STR4_EQ(p + 3, q + 3))
 
-#define ERR_ON(cond, err)   \
+#define PARSE_ERR_ON(cond, err)   \
 do {                        \
     if (cond)               \
         return (err);       \
@@ -174,22 +174,22 @@ int parse_request_line(request_t* request)
 
         // Is "HTTP/major.minor" case-sensitive?
         case RL_S_HTTP_H:
-            ERR_ON(ch != 'T', ERR_INVALID_REQUEST);
+            PARSE_ERR_ON(ch != 'T', ERR_INVALID_REQUEST);
             request->state = RL_S_HTTP_HT;
             break;
 
         case RL_S_HTTP_HT:
-            ERR_ON(ch != 'T', ERR_INVALID_REQUEST);
+            PARSE_ERR_ON(ch != 'T', ERR_INVALID_REQUEST);
             request->state = RL_S_HTTP_HTT;
             break;
 
         case RL_S_HTTP_HTT:
-            ERR_ON(ch != 'P', ERR_INVALID_REQUEST);
+            PARSE_ERR_ON(ch != 'P', ERR_INVALID_REQUEST);
             request->state = RL_S_HTTP_HTTP;
             break;
 
         case RL_S_HTTP_HTTP:
-            ERR_ON(ch != '/', ERR_INVALID_REQUEST);
+            PARSE_ERR_ON(ch != '/', ERR_INVALID_REQUEST);
             request->state = RL_S_HTTP_VERSION_SLASH;
             break;
 
@@ -210,7 +210,7 @@ int parse_request_line(request_t* request)
             case '0' ... '9':
                 request->version.major =
                         request->version.major * 10 + ch - '0';
-                ERR_ON(request->version.major > 999, ERR_INVALID_VERSION);
+                PARSE_ERR_ON(request->version.major > 999, ERR_INVALID_VERSION);
                 break;
             case '.':
                 request->state = RL_S_HTTP_VERSION_DOT;
@@ -237,7 +237,7 @@ int parse_request_line(request_t* request)
             case '0' ... '9':
                 request->version.minor =
                         request->version.minor * 10 + ch - '0';
-                ERR_ON(request->version.minor > 999, ERR_INVALID_VERSION);
+                PARSE_ERR_ON(request->version.minor > 999, ERR_INVALID_VERSION);
                 break;
             case ' ':
                 request->state = RL_S_SP_AFTER_VERSION;
@@ -266,7 +266,7 @@ int parse_request_line(request_t* request)
             break;
 
         case RL_S_ALMOST_DONE:
-            ERR_ON(ch != '\n', ERR_INVALID_REQUEST);
+            PARSE_ERR_ON(ch != '\n', ERR_INVALID_REQUEST);
             goto done;
 
         default:

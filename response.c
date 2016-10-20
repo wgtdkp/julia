@@ -317,6 +317,7 @@ static int put_response(int fd, response_t* response)
     
     // All data in the buffer has been sent
     if (buffer_size(buffer) == 0
+            // FIXME(wgtdkp): what if 404? resource_fd is always -1;
             && response->resource_fd != -1) {
         // TODO(wgtdkp): tansform to chunked if the file is too big
         
