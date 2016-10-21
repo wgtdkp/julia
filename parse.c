@@ -23,11 +23,10 @@
 #define STR6_EQ(p, q)   (STR3_EQ(p, q) && STR3_EQ(p + 3, q + 3))
 #define STR7_EQ(p, q)   (STR3_EQ(p, q) && STR4_EQ(p + 3, q + 3))
 
-#define PARSE_ERR_ON(cond, err)   \
-do {                        \
-    if (cond)               \
-        return (err);       \
-} while (0)
+#define PARSE_ERR_ON(cond, err) {   \
+    if (cond)                       \
+        return (err);               \
+};
 
 static vector_t header_values;
 static vector_t header_value_params;
@@ -94,7 +93,7 @@ int parse_request_line(request_t* request)
     buffer_t* buffer = &request->buffer;
     int uri_err;
     char* p;
-    for (p = buffer->begin; p < buffer->end; p++) {
+    for (p = buffer->begin; p < buffer->end; ++p) {
         char ch = *p;
         
         switch (request->state) {
@@ -617,7 +616,7 @@ int parse_header_line(request_t* request)
 {
     buffer_t* buffer = &request->buffer;
     char* p;
-    for (p = buffer->begin; p < buffer->end; p++) {
+    for (p = buffer->begin; p < buffer->end; ++p) {
         char ch = *p;
         switch (request->state) {
         case HL_S_BEGIN:
@@ -771,7 +770,7 @@ void parse_header_host(request_t* request)
 {
     string_t* host = &request->headers.host;
     char* semicolon = NULL;
-    for (int i = 0; i < host->len; i++) {
+    for (int i = 0; i < host->len; ++i) {
         if (host->data[i] == ':')
             semicolon = &host->data[i];
     }
@@ -795,7 +794,7 @@ static void split_header_value(string_t* val, char split, vector_t* vec)
 
     string_t* cur = NULL;
     char* end = val->data + val->len;
-    for (char* p = val->data; p < end; p++) {
+    for (char* p = val->data; p < end; ++p) {
         if (*p == ' ') {
             if (cur != NULL)
                 cur->len = p - cur->data;
@@ -823,7 +822,7 @@ int parse_header_accept(request_t* request)
     list_t* accept_list = &request->accepts;
     
     split_header_value(val, ',', &header_values);
-    for (int i = 0; i < header_values.size; i++) {
+    for (int i = 0; i < header_values.size; ++i) {
         string_t* val = vector_at(&header_values, i);
 
         split_header_value(val, ';', &header_value_params);
@@ -844,7 +843,7 @@ int parse_header_accept(request_t* request)
         accept_type->subtype.len = type->len - accept_type->type.len - 1;
         
         accept_type->q = 1.0f;
-        for (int j = 1; j < header_value_params.size; j++) {
+        for (int j = 1; j < header_value_params.size; ++j) {
             string_t* param = vector_at(&header_value_params, j);
             if (param->data[0] == 'q' && param->data[1] == '=') {
                 accept_type->q = atof(&param->data[2]);
@@ -869,8 +868,7 @@ int parse_request_body_chunked(request_t* request)
 {
     assert(0);
     buffer_t* buffer = &request->buffer;
-    char* p;
-    for (p = buffer->begin; p < buffer->end; p++) {
+    for (char* p; = buffer->begin; p < buffer->end; ++p) {
         //char ch = *p;
         switch (request->state) {
             

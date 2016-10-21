@@ -11,7 +11,7 @@ int chunk_init(chunk_t* chunk, int width, int size)
         return ERROR;
     
     uint8_t* ele = chunk->data;
-    for (int i = 0; i < size - 1; i++) {
+    for (int i = 0; i < size - 1; ++i) {
         ((chunk_slot_t*)ele)->next = ele + width;
         ele += width;
     }
@@ -37,7 +37,7 @@ int pool_init(pool_t* pool, int width, int chunk_size, int nchunks)
     if (nchunks == 0)
         return err;
 
-    for (int i = 0; i < nchunks; i++) {
+    for (int i = 0; i < nchunks; ++i) {
         chunk_t* chunk = &((chunk_t*)pool->chunks.data)[i];
         err = chunk_init(chunk, pool->width, pool->chunk_size);
         if (err != OK)
@@ -71,7 +71,7 @@ void* pool_alloc(pool_t* pool)
 
 void pool_clear(pool_t* pool)
 {
-    for (int i = 0; i < pool->chunks.size; i++)
+    for (int i = 0; i < pool->chunks.size; ++i)
         chunk_clear(&((chunk_t*)pool->chunks.data)[i]);
     vector_clear(&pool->chunks);
     

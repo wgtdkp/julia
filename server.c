@@ -164,7 +164,7 @@ int main(int argc, char* argv[])
 #ifdef REUSE_PORT
 #define NCORES  (8)
     int workers[NCORES];
-    for (int i = 0; i < NCORES - 1; i++) {
+    for (int i = 0; i < NCORES - 1; ++i) {
         pid_t pid = fork();
         if (pid == 0) {
             goto work;
@@ -174,7 +174,7 @@ int main(int argc, char* argv[])
     }
     workers[NCORES - 1] = getpid();
     cpu_set_t mask;
-    for (int i = 0; i < NCORES; i++) {
+    for (int i = 0; i < NCORES; ++i) {
         CPU_ZERO(&mask);
         CPU_SET(i, &mask);
         sched_setaffinity(workers[i], sizeof(cpu_set_t), &mask);
@@ -221,7 +221,7 @@ work:
         
         clock_t begin = clock();
         //TODO(wgtdkp): multithreading here: seperate fds to several threads
-        for (int i = 0; i < nfds; i++) {
+        for (int i = 0; i < nfds; ++i) {
             // Here is a hacking: 
             // Eeven if events[i].data is set to pointer of connection,
             // we can get it's fd correctly(as 'fd' is the first

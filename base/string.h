@@ -25,7 +25,7 @@ static inline void string_init(string_t* str)
 
 static inline char* string_find(string_t* str, char ch)
 {
-    for (int i = 0; i < str->len; i++)
+    for (int i = 0; i < str->len; ++i)
         if (str->data[i] == ch)
             return &str->data[i];
     return NULL;

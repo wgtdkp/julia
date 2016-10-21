@@ -255,7 +255,7 @@ static int put_response(int fd, response_t* response);
 void mime_map_init(void)
 {
     int n = sizeof(mime_tb) / sizeof(mime_tb[0]);
-    for (int i = 0; i < n; i++) {
+    for (int i = 0; i < n; ++i) {
         map_val_t val;
         val.mime = mime_tb[i][1];
         map_put(&mime_map, &mime_tb[i][0], &val);

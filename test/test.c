@@ -12,14 +12,14 @@ int arr[101];
 /*
 int test_vector(void)
 {
-    for (int i = 0; i < 101; i++) {
+    for (int i = 0; i < 101; ++i) {
         arr[i] = i;
     }
     
     vector_t vec;
     vector_init(&vec, sizeof(int), 6);
     int* vec_data = vec.data;
-    for (int i = 0; i < vec.size; i++) {
+    for (int i = 0; i < vec.size; ++i) {
         vec_data[i] = arr[i];
         printf("vec[%d]: %d\n", i, vec_data[i]);
     }
@@ -27,7 +27,7 @@ int test_vector(void)
     printf("vec.capacity: %d\n", vec.capacity);
     
     vector_clear(&vec);
-    for (int i = 0; i < 101; i++) {
+    for (int i = 0; i < 101; ++i) {
         *(int*)vector_push(&vec) = arr[i];
         //vector_push(&vec);
         printf("vec[%d]: %d\n", i, ((int*)vec.data)[i]);
@@ -54,7 +54,7 @@ int test_pool(void)
     
     int* arr[101];
     
-    for (int i = 0; i < 101; i++) {
+    for (int i = 0; i < 101; ++i) {
         int* ele = pool_alloc(&pool);
         *ele = i;
         arr[i] = ele;
@@ -63,7 +63,7 @@ int test_pool(void)
     //printf("pool.nallocated: %d\n", pool.nallocated);
     //printf("chunck number: %d\n", pool.chunks.size);
 
-    for (int i = 0; i < 101; i++) {
+    for (int i = 0; i < 101; ++i) {
         pool_free(&pool, arr[i]);
     }
     
@@ -86,11 +86,11 @@ int test_list(void)
     pool_init(&pool, LIST_WIDTH(int), 100, 0);
     list_init(&list, &pool);
     
-    for (int i = 0; i < 101; i++) {
+    for (int i = 0; i < 101; ++i) {
         arr[i] = i;
     }
   
-    for (int i = 0; i < 101; i++) {
+    for (int i = 0; i < 101; ++i) {
         list_node_t* new_node = list_alloc(&list);
         *(int*)&new_node->data = arr[i];
         list_insert(&list, &list.dummy, new_node);
@@ -140,11 +140,11 @@ int test_queue(void)
     pool_init(&pool, QUEUE_WIDTH(int), 100, 0);
     queue_init(&queue, &pool);
     
-    for (int i = 0; i < 101; i++) {
+    for (int i = 0; i < 101; ++i) {
         arr[i] = i;
     }
     
-    for (int i = 0; i < 101; i++) {
+    for (int i = 0; i < 101; ++i) {
         int* ele = queue_alloc(&queue);
         *ele = arr[i];
         queue_push(&queue, ele);

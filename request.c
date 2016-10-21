@@ -109,7 +109,7 @@ static map_t header_map = {
 void header_map_init(void)
 {
     int n = sizeof(header_tb) / sizeof(header_tb[0]);
-    for (int i = 0; i < n; i++) {
+    for (int i = 0; i < n; ++i) {
         map_val_t val;
         val.header = header_tb[i].val;
         map_put(&header_map, &header_tb[i].name, &val);
@@ -415,6 +415,7 @@ static int request_handle_body(request_t* request, response_t* response)
         break;
     default:
         // TODO(wgtdkp): cannot understanding
+        // May discard the body
         ;
     }
        

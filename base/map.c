@@ -40,7 +40,7 @@ void map_put(map_t* map, const string_t* key, const map_val_t* val)
 static hash_t string_hash(const string_t* str)
 {
     hash_t hash = 0;
-    for (int i = 0; i < str->len; i++)
+    for (int i = 0; i < str->len; ++i)
         hash = (hash * 31) + str->data[i];
     return hash;
 }
