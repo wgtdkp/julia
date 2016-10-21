@@ -15,7 +15,7 @@ A lightweight high performance http server
 ### MAKE
 ```shell
   $ git submodule update --init
-  $ make julia
+  $ make all
 ```
 
 ### RUN

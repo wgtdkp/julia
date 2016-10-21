@@ -83,8 +83,6 @@ static int startup(uint16_t port)
 #ifdef REUSE_PORT
     setsockopt(listen_fd, SOL_SOCKET, SO_REUSEPORT, &on, sizeof(on));
 #endif
-    
-
 
     memset((void*)&server_addr, 0, addr_len);
     server_addr.sin_family = AF_INET;
@@ -127,6 +125,26 @@ static int server_init(char* cfg_file)
     EXIT_ON(doc_root_fd == -1, "open(doc_root)");
     
     return OK;
+}
+
+static void accept_connection(int listen_fd)
+{
+    while (true) {
+        int connection_fd = accept(listen_fd, NULL, NULL);
+        if (connection_fd == -1) {
+            // TODO(wgtdkp): handle this error
+            // There could be too many connections(beyond OPEN_MAX)
+            ERR_ON((errno != EWOULDBLOCK), "accept");
+            break;
+        }
+        connection_t* connection =
+                open_connection(connection_fd, &connection_pool);
+        if (connection == NULL) {
+            close(connection_fd);
+            ju_error("too many concurrent connection");
+        }
+        max_connection = max(max_connection, connection_pool.nallocated);
+    }
 }
 
 static void usage(void)
@@ -173,6 +191,7 @@ work:
             wait(&stat);
             if (WIFEXITED(stat))
                 exit(-1);
+            // Worker unexpectly exited, restart it
         } else {
             break;
         }
@@ -192,7 +211,6 @@ work:
     printf("julia started...\n");
     printf("listening at port: %u\n", server_cfg.port);
     print_string("doc root: %*s\n", &server_cfg.doc_root);
-    fflush(stdout);
 
     assert(add_listener(&listen_fd) != -1);
     while (true) {
@@ -211,22 +229,7 @@ work:
             int fd = *((int*)(events[i].data.ptr));
             if (fd == listen_fd) {
                 // We could accept more than one connection per request
-                while (true) {
-                    int connection_fd = accept(fd, NULL, NULL);
-                    if (connection_fd == -1) {
-                        // TODO(wgtdkp): handle this error
-                        // There could be too many connections(beyond OPEN_MAX)
-                        ERR_ON((errno != EWOULDBLOCK), "accept");
-                        break;
-                    }
-                    connection_t* connection =
-                            open_connection(connection_fd, &connection_pool);
-                    if (connection == NULL) {
-                        close(connection_fd);
-                        fprintf(stderr, "too many concurrent connection\n");
-                    }
-                    max_connection = max(max_connection, connection_pool.nallocated);
-                }
+                accept_connection(listen_fd);
                 continue;
             }
             if (events[i].events & EPOLLIN) {

@@ -7,12 +7,7 @@
 
 config_t server_cfg;
 
-/*
- * Extension for juson
- */
-
-
-#define CFG_ERR_ON(cond, msg)           \
+#define CFG_ERR_ON(cond, msg)       \
 if ((cond)) {                       \
     ju_error("config file: "msg);   \
     return ERROR;                   \
