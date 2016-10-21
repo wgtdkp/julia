@@ -20,7 +20,7 @@ A lightweight high performance http server
 
 ### RUN
 ```
-$ ./julia config.json
+$ ./build/julia config.json
 ```
 You may modify the config file to specify the port if there is a confliction.
 
@@ -32,7 +32,7 @@ You may modify the config file to specify the port if there is a confliction.
 Yes, i wrote a C11 compiler(let me call it [wgtcc](https://github.com/wgtdkp/wgtcc)). It compiles **julia**, and the site runs well. :) You can install [wgtcc](https://github.com/wgtdkp/wgtcc), then compile **julia**:
 
 ```shell
-  $ make CC=wgtcc julia
+  $ make CC=wgtcc all
 ```
 It surprised me that the server compiled by **wgtcc** runs extremely fast!
 
