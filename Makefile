@@ -39,13 +39,3 @@ $(OBJS_DIR)%.o: %.c
 
 clean:
 	@rm -rf $(OBJS_DIR)
-
-TEST_SRCS = base/buffer.c base/list.c\
-		base/map.c base/pool.c\
-		base/string.c base/vector.c\
-	   	config.c connection.c juson.c parse.c\
-		request.c response.c test.c util.c
-TEST_OBJS = $(TEST_SRCS:.c=.s)
-
-TEST: $(TEST_OBJS)
-	gcc -o $@ $^

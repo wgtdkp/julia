@@ -1,11 +1,20 @@
+[juson]: https://github.com/wgtdkp/juson
+[nginx]: https://nginx.org/
+[lighttpd]: https://www.lighttpd.net/
+
 # julia
 A lightweight high performance http server
+
 ### ENVIRONMENT
-1. gcc 5.4.0
-2. linux 4.4.0
+* gcc 5.4.0
+* linux 4.4.0
+
+### DEPENDENCY
+* _[juson]_
 
 ### MAKE
 ```shell
+  $ git submodule update --init
   $ make julia
 ```
 
@@ -33,6 +42,7 @@ It surprised me that the server compiled by **wgtcc** runs extremely fast!
 3. benchmark
 
 ### REFERENCE
-1. [nginx](https://nginx.org/)
-2. [lighttpd](https://www.lighttpd.net/)
+1. _[juson]_
+2. _[nginx]_
+3. _[lighttpd]_
  
