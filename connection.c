@@ -1,14 +1,4 @@
-#include "connection.h"
-
-#include "request.h"
-#include "response.h"
-
-#include <assert.h>
-#include <fcntl.h>
-#include <stddef.h>
-#include <stdio.h>
-#include <string.h>
-#include <unistd.h>
+#include "server.h"
 
 int epoll_fd;
 julia_epoll_event_t events[MAX_EVENT_NUM];

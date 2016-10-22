@@ -2,19 +2,8 @@
  * Based on nginx ngx_http_parse.c
  */
 
-#include "parse.h"
+#include "server.h"
 
-#include "base/buffer.h"
-#include "base/map.h"
-#include "base/string.h"
-
-#include "request.h"
-#include "util.h"
-
-#include <assert.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <ctype.h>
 
 #define STR2_EQ(p, q)   ((p)[0] == (q)[0] && (p)[1] == (q)[1])
 #define STR3_EQ(p, q)   (STR2_EQ(p, q) && (p)[2] == (q)[2])
@@ -868,7 +857,7 @@ int parse_request_body_chunked(request_t* request)
 {
     assert(0);
     buffer_t* buffer = &request->buffer;
-    for (char* p; = buffer->begin; p < buffer->end; ++p) {
+    for (char* p = buffer->begin; p < buffer->end; ++p) {
         //char ch = *p;
         switch (request->state) {
             

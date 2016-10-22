@@ -1,7 +1,6 @@
 #ifndef _JULIA_MAP_H_
 #define _JULIA_MAP_H_
 
-#include "request.h"
 #include "string.h"
 
 typedef string_t mime_val_t;
@@ -10,6 +9,10 @@ typedef unsigned int hash_t;
 /*
  * Map from string_t to string_t or int
  */
+typedef struct {
+    int offset;
+    void* processor;
+} header_val_t;
 
 typedef union {
     mime_val_t mime;

@@ -1,12 +1,15 @@
 #ifndef _JULIA_BUFFER_H_
 #define _JULIA_BUFFER_H_
 
-#include "server.h"
 #include "string.h"
 #include "util.h"
 
 #include <memory.h>
 #include <stdbool.h>
+#include <stdint.h>
+
+#define RECV_BUF_SIZE   (4 * 1024)
+#define SEND_BUF_SIZE   (4 * 1024)
 
 typedef struct {
     char* begin;
@@ -38,6 +41,26 @@ static inline int buffer_append(buffer_t* buffer, const char* data, int len)
     memcpy(buffer->end, data, appended_len);
     buffer->end += appended_len;
     return appended_len;
+}
+
+static inline int buffer_append_u8(buffer_t* buffer, uint8_t val)
+{
+    if (buffer->limit <= buffer->end)
+        return 0;
+    *buffer->end++ = val;
+    return 1;
+}
+
+static inline int buffer_append_u16le(buffer_t* buffer, uint16_t val)
+{
+    int len = buffer_append_u8(buffer, val & 0xff);
+    return len + buffer_append_u8(buffer, (val >> 8) & 0xff);
+}
+
+static inline int buffer_append_u32le(buffer_t* buffer, uint32_t val)
+{
+    int len = buffer_append_u16le(buffer, val & 0xffff);
+    return len + buffer_append_u16le(buffer, (val >> 16) & 0xffff);
 }
 
 // Discard the received data that has been successfully parsed.

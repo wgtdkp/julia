@@ -1,27 +1,4 @@
-
-#include "request.h"
-
-#include "base/buffer.h"
-#include "base/map.h"
-#include "base/string.h"
-
-#include "parse.h"
-#include "response.h"
 #include "server.h"
-#include "util.h"
-
-#include <assert.h>
-#include <ctype.h>
-#include <fcntl.h>
-#include <memory.h>
-#include <stddef.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <strings.h>
-#include <time.h>
-#include <unistd.h>
-
 
 static int request_handle_uri(request_t* request, response_t* response);
 static int request_handle_request_line(
@@ -236,7 +213,7 @@ static int request_handle_uri(request_t* request, response_t* response)
     } else {
         rel_path = uri->abs_path.data + 1;
     }
-    
+
     int fd = openat(doc_root_fd, rel_path, O_RDONLY);
     
     // Open the requested resource failed
@@ -313,10 +290,10 @@ static int request_handle_headers(request_t* request, response_t* response)
                 break;
             header_val_t header = slot->val.header;
             if (header.offset != -1) {
-                int err = header.processor(request,
-                        header.offset, response);
+                header_processor_t processor = header.processor;
+                int err = processor(request, header.offset, response);
                 if (err != 0)
-                    return err; 
+                    return err;
             }
         } break; 
         default:

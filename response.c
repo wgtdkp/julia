@@ -1,20 +1,6 @@
-#include "response.h"
-
-#include "base/buffer.h"
-#include "base/map.h"
-
-#include "request.h"
-#include "util.h"
-
-#include <assert.h>
-#include <errno.h>
-#include <stdlib.h>
-#include <strings.h>
-#include <time.h>
-#include <unistd.h>
+#include "server.h"
 
 #include <sys/sendfile.h>
-
 
 #define SERVER_NAME     "julia/0.1"
 
@@ -338,8 +324,24 @@ static int put_response(int fd, response_t* response)
     return AGAIN;
 }
 
+int may_handle_dynamic(response_t* response, request_t* request)
+{
+    string_t* extension = &request->uri.extension;
+    if (string_eq(extension, &STRING("py"))) {
+        return uwsgi_takeover(response, request);
+    } else {
+        // TODO(wgtdkp): support more dynamic resource
+    }
+    return ERROR;
+}
+
 int response_build(response_t* response, request_t* request)
 {
+    // TODO(wgtdkp):
+    //int err = may_handle_dynamic(response, request);
+    //if (err == OK)
+    //    return OK;
+
     buffer_t* buffer = &response->buffer;
     
     response_put_status_line(response, request);
@@ -564,3 +566,4 @@ static const string_t status_repr(int status)
     
     return string_null;    // Make compile happy
 }
+

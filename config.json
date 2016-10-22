@@ -7,8 +7,9 @@
     "port": 12345,
     "doc_root": "./www",
     "dynamic": {
-        "php": {
-            "server": "27.0.0.1:9000"
+        "python": {
+            "socket": "TCP/IP", /* UNIX or TCP/IP */
+            "addr": "127.0.0.1:8000"
         }
     }
 }

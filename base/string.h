@@ -41,6 +41,11 @@ static inline char* string_end(string_t* str)
     return str->data + str->len;
 }
 
+static inline void string_free(string_t* str)
+{
+    free(str->data);
+}
+
 int print_string(const char* format, ...);
 int string_cmp(const string_t* lhs, const string_t* rhs);
 bool string_eq(const string_t* lhs, const string_t* rhs);

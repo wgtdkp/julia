@@ -1,11 +1,7 @@
 #include "map.h"
-#include "connection.h"
-#include "request.h"
 #include "string.h"
 
 #include <stddef.h>
-
-
 
 static hash_t string_hash(const string_t* str);
 

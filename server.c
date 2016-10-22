@@ -1,43 +1,7 @@
 #include "server.h"
 
-#include "base/map.h"
-
-#include "config.h"
-#include "connection.h"
-#include "parse.h"
-#include "request.h"
-#include "response.h"
-#include "util.h"
-
-#include <assert.h>
-#include <ctype.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <pthread.h>
-#include <sched.h>
-#include <stddef.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <strings.h>
-#include <time.h>
-#include <unistd.h>
-
-#include <sys/epoll.h>
-#include <sys/mman.h>
-#include <sys/resource.h>
-#include <sys/socket.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-
-
 int doc_root_fd;
+int app_fd;
 static pid_t worker_pid;
 static clock_t total = 0;
 static int total_reqs = 0;
@@ -70,12 +34,13 @@ static int startup(uint16_t port)
     signal(SIGPIPE, SIG_IGN);
     signal(SIGINT, sig_int);
     
+    // Open socket, bind and listen
     int listen_fd = 0;
     struct sockaddr_in server_addr = {0};
     int addr_len = sizeof(server_addr);
     listen_fd = socket(PF_INET, SOCK_STREAM, 0);
-    if (listen_fd == -1) {
-        return -1;
+    if (listen_fd == ERROR) {
+        return ERROR;
     }
 
     int on = 1;
@@ -89,12 +54,12 @@ static int startup(uint16_t port)
     server_addr.sin_port = htons(port);
     server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
     if (bind(listen_fd, (struct sockaddr*)&server_addr, addr_len) < 0) {
-        return -1;
+        return ERROR;
     }
 
     // TODO(wgtdkp): make parameter 'backlog' configurable?
     if (listen(listen_fd, 1024) < 0) {
-        return -1;
+        return ERROR;
     }
     return listen_fd;
 }
@@ -119,10 +84,10 @@ static int server_init(char* cfg_file)
     
     
     epoll_fd = epoll_create1(0);
-    EXIT_ON(epoll_fd == -1, "epoll_create1");
+    EXIT_ON(epoll_fd == ERROR, "epoll_create1");
 
     doc_root_fd = open(server_cfg.doc_root.data, O_RDONLY);
-    EXIT_ON(doc_root_fd == -1, "open(doc_root)");
+    EXIT_ON(doc_root_fd == ERROR, "open(doc_root)");
     
     return OK;
 }
@@ -131,7 +96,7 @@ static void accept_connection(int listen_fd)
 {
     while (true) {
         int connection_fd = accept(listen_fd, NULL, NULL);
-        if (connection_fd == -1) {
+        if (connection_fd == ERROR) {
             // TODO(wgtdkp): handle this error
             // There could be too many connections(beyond OPEN_MAX)
             ERR_ON((errno != EWOULDBLOCK), "accept");
@@ -157,7 +122,7 @@ int main(int argc, char* argv[])
 {
     if (argc < 2) {
         usage();
-        exit(-1);
+        exit(ERROR);
     }
     worker_pid = getpid();
 
@@ -190,32 +155,34 @@ work:
         else if (worker_pid > 0) {
             wait(&stat);
             if (WIFEXITED(stat))
-                exit(-1);
+                exit(ERROR);
             // Worker unexpectly exited, restart it
         } else {
             break;
         }
     }
 #endif
-    int listen_fd = -1;
+    int listen_fd = ERROR;
 
     if (server_init(argv[1]) != OK)
-        return -1;
+        return ERROR;
     
     listen_fd = startup(server_cfg.port);
     if (listen_fd < 0) {
         fprintf(stderr, "startup server failed\n");
-        exit(-1);
+        exit(ERROR);
     }
-
+    if ((app_fd = uwsgi_open_connection(&server_cfg)) < 0)
+        fprintf(stderr, "connect to application failed");
+    
     printf("julia started...\n");
     printf("listening at port: %u\n", server_cfg.port);
     print_string("doc root: %*s\n", &server_cfg.doc_root);
 
-    assert(add_listener(&listen_fd) != -1);
+    assert(add_listener(&listen_fd) != ERROR);
     while (true) {
         int nfds = epoll_wait(epoll_fd, events, MAX_EVENT_NUM, 3000);
-        if (nfds == -1) {
+        if (nfds == ERROR) {
             EXIT_ON(errno != EINTR, "epoll_wait");
         }
         
