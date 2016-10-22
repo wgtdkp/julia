@@ -173,7 +173,7 @@ work:
         exit(ERROR);
     }
     if ((app_fd = uwsgi_open_connection(&server_cfg)) < 0)
-        fprintf(stderr, "connect to application failed");
+        fprintf(stderr, "connect to application failed\n");
     
     printf("julia started...\n");
     printf("listening at port: %u\n", server_cfg.port);
