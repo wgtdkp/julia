@@ -16,47 +16,24 @@ static inline const string_t juson_val2str(juson_value_t* val)
     return (const string_t){(char*)val->sval, val->len};
 }
 
-// Append null terminal at the end
-static size_t move_string(char* des, string_t* src)
+static void config_init(config_t* cfg)
 {
-    memcpy(des, src->data, src->len);
-    des[src->len] = '\0';
-    src->data = des;
-    return src->len + 1;
-}
-
-static int split_port(string_t* addr)
-{
-    const char* p = string_end(addr);
-    while (p >= addr->data) {
-        if (*p == ':') {
-            addr->len = p - addr->data;
-            return atoi(p + 1);
-        }
-        --p;
-    }
-    return -1;
+    memset(cfg, 0, sizeof(*cfg));
 }
 
 int config_load(config_t* cfg, char* file_name)
 {
-    size_t len = 0;
-    
+    config_init(cfg);
+
     juson_doc_t json;
-    char* text = juson_load(file_name);
-    if (text == NULL) {
+    cfg->text = juson_load(file_name);
+    if (cfg->text == NULL) {
         ju_error("load file '%s' failed", file_name);
         return ERROR;
     }
     
-    juson_value_t* root = juson_parse(&json, text);
+    juson_value_t* root = juson_parse(&json, cfg->text);
     CFG_ERR_ON(root == NULL || root->t != JUSON_OBJECT, "bad format");
-    
-    juson_value_t* host_val = juson_object_get(root, "host");
-    CFG_ERR_ON(host_val == NULL || host_val->t != JUSON_STRING,
-            "host not specified");
-    cfg->host = juson_val2str(host_val);
-    len += cfg->host.len;
     
     juson_value_t* port_val = juson_object_get(root, "port");
     if (port_val == NULL || port_val->t != JUSON_INTEGER) {
@@ -65,46 +42,46 @@ int config_load(config_t* cfg, char* file_name)
         cfg->port = port_val->ival;
     }
     
-    juson_value_t* doc_root_val = juson_object_get(root, "doc_root");
-    CFG_ERR_ON(doc_root_val == NULL || doc_root_val->t != JUSON_STRING,
+    juson_value_t* root_val = juson_object_get(root, "root");
+    CFG_ERR_ON(root_val == NULL || root_val->t != JUSON_STRING,
             "doc root not specified");
-    cfg->doc_root = juson_val2str(doc_root_val);
-    len += cfg->doc_root.len;
-    
-    juson_value_t* dynamic;
-    juson_value_t* python;
-    juson_value_t* addr;    
-    if ((dynamic = juson_object_get(root, "dynamic")) &&
-        (python = juson_object_get(dynamic, "python")) &&
-        (addr = juson_object_get(python, "addr"))) {
-        cfg->dynamic_addr = juson_val2str(addr);
-        juson_value_t* socket = juson_object_get(python, "socket");
-        CFG_ERR_ON(socket == NULL, "specify dynamic error, bad format");
-        cfg->dynamic_unix_socket = strncmp("unix", socket->sval, 4) == 0;
-        if (!cfg->dynamic_unix_socket) {
-            int port = split_port(&cfg->dynamic_addr);
-            CFG_ERR_ON(port < 0, "expect port for dynamic addr");
-            cfg->dynamic_port = port;
-        }
-        len += cfg->dynamic_addr.len;
-    } else {
-        CFG_ERR_ON(1, "specify dynamic error, bad format");
-    }
-    
-    cfg->data = malloc(len);
-    CFG_ERR_ON(cfg->data == NULL, "no memory");
-    
-    len = 0;
-    len += move_string(cfg->data + len, &cfg->host);
-    len += move_string(cfg->data + len, &cfg->doc_root);
-    len += move_string(cfg->data + len, &cfg->dynamic_addr);
+    cfg->root = juson_val2str(root_val);
 
-    free(text);
+    juson_value_t* locations_val = juson_object_get(root, "locations");
+    CFG_ERR_ON(root_val == NULL || locations_val->t != JUSON_ARRAY ||
+            locations_val->size == 0, "parse locations specification failed");
+    
+    vector_init(&cfg->locations, sizeof(location_t), locations_val->size);
+    for (int i = 0; i < locations_val->size; ++i) {
+        location_t* loc = vector_at(&cfg->locations, i);
+        juson_value_t* loc_val = juson_array_get(locations_val, i);
+        juson_value_t* path_val = juson_array_get(loc_val, 0);
+        loc->path = juson_val2str(path_val);
+        juson_value_t* loc_cfg_val = juson_array_get(loc_val, 1);
+        juson_value_t* pass_val = juson_object_get(loc_cfg_val, "pass");
+        if (pass_val != NULL) {
+            loc->pass = true;
+            loc->host = juson_val2str(juson_array_get(pass_val, 0));
+            loc->port = juson_array_get(pass_val, 1)->ival;
+            string_t protocol =
+                    juson_val2str(juson_object_get(loc_cfg_val, "protocol"));
+            if (string_eq(&protocol, &STRING("http")))
+                loc->protocol = PROT_HTTP;
+            else if (string_eq(&protocol, &STRING("fcgi")))
+                loc->protocol = PROT_FCGI;
+            else
+                loc->protocol = PROT_UWSGI; // Default
+        } else {
+            loc->pass = false;
+        }
+    }
+
     juson_destroy(&json);
     return OK;
 }
 
 void config_destroy(config_t* cfg)
 {
-    free(cfg->data);
+    free(cfg->text);
+    vector_clear(&cfg->locations);
 }

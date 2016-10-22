@@ -4,12 +4,22 @@
      * the first one will be active.
      */
     "host": "localhost",
-    "port": 12345,
-    "doc_root": "./www",
-    "dynamic": {
-        "python": {
-            "socket": "TCP/IP", /* UNIX or TCP/IP */
-            "addr": "127.0.0.1:8000"
-        }
-    }
+    "port": 4000,
+    "root": "www",
+    /*
+     * The order the locations specified, 
+     * is the order they are matched.
+     * So, to make "/static/" matched, it must
+     * be specified before "/".
+     */
+    "locations": [
+        ["/static/", {
+            // Currenly, not supported
+            //"index": ["index.html", "index.htm"] 
+        }],
+        ["/", {
+            "pass": ["127.0.0.1", "8000"],
+            "protocol": "uwsgi" /* May support fastcgi in the future */
+        }]
+    ]
 }
