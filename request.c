@@ -214,7 +214,7 @@ static int request_handle_uri(request_t* request, response_t* response)
         rel_path = uri->abs_path.data + 1;
     }
 
-    int fd = openat(doc_root_fd, rel_path, O_RDONLY);
+    int fd = openat(root_fd, rel_path, O_RDONLY);
     
     // Open the requested resource failed
     if (fd == -1) {

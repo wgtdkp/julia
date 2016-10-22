@@ -3,41 +3,6 @@
 static int uwsgi_start_request(int fd, request_t* request);
 static int uwsgi_handle_response(int fd, response_t* response);
 
-int uwsgi_open_connection(config_t* cfg)
-{
-    bool unix_socket = cfg->dynamic_unix_socket;
-    string_t* addr = &cfg->dynamic_addr;
-    uint16_t port = cfg->dynamic_port;
-    int fd;
-    if (unix_socket) {
-        fd = socket(AF_LOCAL, SOCK_STREAM, 0);
-        unlink(addr->data);
-        struct sockaddr_un app_addr;
-        bzero(&app_addr, sizeof(app_addr));
-        app_addr.sun_family = AF_LOCAL;
-        // FIXME(wgtdkp): check path length
-        strcpy(app_addr.sun_path, addr->data);
-        int err = connect(fd, (struct sockaddr*)&app_addr, sizeof(app_addr));
-        return err ? -1: fd;
-    } else {
-        fd = socket(AF_INET, SOCK_STREAM, 0);
-        struct sockaddr_in app_addr;
-        bzero(&app_addr, sizeof(app_addr));
-        app_addr.sin_family = AF_INET;
-        app_addr.sin_port = htons(port);
-        int err = connect(fd, (struct sockaddr*)&app_addr, sizeof(app_addr));
-        return err ? -1: fd;
-    }
-    return -1;
-}
-
-
-int uwsgi_close_connection(int fd)
-{
-    close(fd);
-    return OK;
-}
-
 /*
  * Takeover request from server
  */

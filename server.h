@@ -6,6 +6,7 @@
 #include "base/pool.h"
 #include "base/queue.h"
 #include "base/string.h"
+#include "base/vector.h"
 #include "event.h"
 #include "server.h"
 #include "util.h"
@@ -44,26 +45,38 @@
 #define EVENTS_IN   (EPOLLIN | EPOLLET)
 #define EVENTS_OUT  (EPOLLOUT | EPOLLET)
 
-extern int doc_root_fd;
+extern int root_fd;
 extern int app_fd;
 
 /*
  * Config
  */
+typedef enum {
+    PROT_HTTP,
+    PROT_UWSGI, // support only uwsgi
+    PROT_FCGI,
+} protocol_t;
+
 typedef struct {
+    bool pass;
+    int fd;
+    string_t path;
     string_t host;
     uint16_t port;
-    
-    string_t doc_root;
-    bool dynamic_unix_socket;
-    string_t dynamic_addr;
-    uint16_t dynamic_port;
-    char* data; // Allocated space for string_t members
+    protocol_t protocol;
+} location_t;
+
+typedef struct {
+    uint16_t port;
+    string_t root;
+    vector_t locations;
+    char* text;
 } config_t;
 
 extern config_t server_cfg;
 
 int config_load(config_t* cfg, char* file_name);
+void config_destroy(config_t* cfg);
 
 /*
  * Connection
@@ -384,10 +397,14 @@ int parse_header_accept(request_t* request);
 void parse_header_host(request_t* request);
 
 /*
+ * Backend
+ */
+void backend_close_connection(location_t* loc);
+void backend_open_connection(location_t* loc);
+
+/*
  * uWSGI
  */
-int uwsgi_open_connection(config_t* cfg);
-int uwsgi_close_connection(int fd);
 int uwsgi_takeover(response_t* response, request_t* request);
 
 #endif

@@ -1,6 +1,6 @@
 #include "server.h"
 
-int doc_root_fd;
+int root_fd;
 int app_fd;
 static pid_t worker_pid;
 static clock_t total = 0;
@@ -86,8 +86,8 @@ static int server_init(char* cfg_file)
     epoll_fd = epoll_create1(0);
     EXIT_ON(epoll_fd == ERROR, "epoll_create1");
 
-    doc_root_fd = open(server_cfg.doc_root.data, O_RDONLY);
-    EXIT_ON(doc_root_fd == ERROR, "open(doc_root)");
+    root_fd = open(server_cfg.root.data, O_RDONLY);
+    EXIT_ON(root_fd == ERROR, "open(root)");
     
     return OK;
 }
@@ -172,12 +172,17 @@ work:
         fprintf(stderr, "startup server failed\n");
         exit(ERROR);
     }
-    if ((app_fd = uwsgi_open_connection(&server_cfg)) < 0)
-        fprintf(stderr, "connect to application failed\n");
+
+    for (int i = 0; i < server_cfg.locations.size; ++i) {
+        location_t* loc = vector_at(&server_cfg.locations, i);
+        if (loc->pass) {
+            backend_open_connection(loc);
+        }
+    }
     
     printf("julia started...\n");
     printf("listening at port: %u\n", server_cfg.port);
-    print_string("doc root: %*s\n", &server_cfg.doc_root);
+    print_string("doc root: %*s\n", &server_cfg.root);
 
     assert(add_listener(&listen_fd) != ERROR);
     while (true) {

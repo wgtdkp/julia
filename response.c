@@ -337,10 +337,9 @@ int may_handle_dynamic(response_t* response, request_t* request)
 
 int response_build(response_t* response, request_t* request)
 {
-    // TODO(wgtdkp):
-    //int err = may_handle_dynamic(response, request);
-    //if (err == OK)
-    //    return OK;
+    int err = may_handle_dynamic(response, request);
+    if (err == OK)
+        return OK;
 
     buffer_t* buffer = &response->buffer;
     
