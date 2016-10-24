@@ -126,8 +126,11 @@ void request_init(request_t* request)
     request->stage = RS_REQUEST_LINE;
     request->state = RL_S_BEGIN; 
     request->keep_alive = false;
+    request->discard_body = false;
+    request->body_done = false;
     request->t_encoding = TE_IDENTITY;
     request->content_length = -1;
+    request->body_received = 0;
     
     buffer_init(&request->buffer);
     request->pass = false;
@@ -166,8 +169,8 @@ int handle_request(connection_t* connection)
         return OK;
     }
     // Print request
-    //if (buffer_size(buffer) > 0)
-    //    print_buffer(buffer);
+    if (buffer_size(buffer) > 0)
+        print_buffer(buffer);
 
     if (err == OK && request->stage == RS_REQUEST_LINE) {
         err = request_handle_request_line(request, request->response);
@@ -188,7 +191,6 @@ int handle_request(connection_t* connection)
     if (err == AGAIN)
         return err;
 
-    assert(buffer_size(&request->response->buffer) == 0);
     queue_push(&connection->response_queue, request->response);
     request_clear(request);
     
@@ -387,7 +389,7 @@ static int header_handle_content_length(
         return response_build_err(response, request, 400);
     }
     if (request->method == M_GET || request->method == M_HEAD) {
-        request->discard_body = 1;
+        //request->discard_body = 1;
     }
     request->content_length = len;
     return OK;

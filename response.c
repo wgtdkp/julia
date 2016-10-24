@@ -311,6 +311,9 @@ static int put_response(int fd, response_t* response)
     buffer_send(buffer, fd);
     if (response->fetch_from_back) {
         // If fetched all data or not
+        if (response->resource_fd == -1) {
+            printf("\nresponse done\n");
+        }
         return response->resource_fd == -1 ? OK: AGAIN;
     }
     // All data in the buffer has been sent
@@ -324,6 +327,7 @@ static int put_response(int fd, response_t* response)
                     response->resource_stat.st_size);
             if (len == 0) {
                 response_clear(response);
+                printf("\nresponse done\n");
                 return OK;
             } else if (len < 0) {
                 if (errno == EAGAIN)

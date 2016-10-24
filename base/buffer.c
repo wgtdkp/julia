@@ -20,7 +20,7 @@ int buffer_recv(buffer_t* buffer, int fd)
     while (buffer->end < buffer->limit) {
         int margin = buffer->limit - buffer->end;
         int len = recv(fd, buffer->end, margin, 0);
-        if (len == 0)   // EOF
+        if (len == 0) // EOF
             return -read_n;
         if (len == -1) {
             if (errno == EAGAIN)

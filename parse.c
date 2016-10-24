@@ -877,12 +877,12 @@ int parse_request_body_identity(request_t* request)
     if (request->body_received >= request->content_length) {
         // Received full Body
         
-        if (request->discard_body) {
-            // There may be data belongs to the next request
-            buffer->begin += request->body_received - request->content_length;
-            //request->body_done = 1;
-            //return OK;
-        }
+        //if (request->discard_body) {
+        //    // There may be data belongs to the next request
+        //    buffer->begin += request->body_received - request->content_length;
+        //    //request->body_done = 1;
+        //    //return OK;
+        //}
         request->body_done = 1;
         return OK;
     }

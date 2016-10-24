@@ -15,9 +15,6 @@ int uwsgi_takeover(connection_t* connection)
         if (err != OK)
             return err;
     }
-    // Shouldn't try to receive until the event triggered
-    //uwsgi_fetch_response(response);
-    //printf("%d\n", buffer_size(&response->buffer)); fflush(stdout);
     return OK;
 }
 
@@ -78,7 +75,13 @@ static int uwsgi_start_request(int fd, connection_t* connection)
     // blocking send should be fine.
     buffer_send(&buf, fd);
     // Send the body
-    assert(buffer_size(&request->buffer) == request->body_received);
+    if (buffer_size(&request->buffer) != request->body_received) {
+        print_buffer(&request->buffer);
+        printf("size: %d, received: %d\n", buffer_size(&request->buffer), request->body_received);
+        printf("content-length: %d\n", request->content_length);
+        fflush(stdout);
+        assert(false);
+    }
     buffer_send(&request->buffer, fd);
     
     set_nonblocking(fd);
@@ -108,6 +111,7 @@ int uwsgi_fetch_response(response_t* response)
     if (response->resource_fd == -1)
         return OK; // Have already fetched all data
     buffer_t* buffer = &response->buffer;
+    // If use epoll level trigger, data may be lost here
     int read_n = buffer_recv(buffer, response->resource_fd);
     //print_buffer(buffer);    
     if (read_n <= 0) { // We done fetch the whole response from backend
