@@ -8,21 +8,20 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define RECV_BUF_SIZE   (8 * 1024)
-#define SEND_BUF_SIZE   (8 * 1024)
+#define BUF_SIZE   (2 * 1024)
 
 typedef struct {
     char* begin;
     char* end;
     char* limit;
-    char data[RECV_BUF_SIZE + 1];
+    char data[BUF_SIZE + 1];
 } buffer_t;
 
 static inline void buffer_init(buffer_t* buffer)
 {
     buffer->begin = buffer->data;
     buffer->end = buffer->data;
-    buffer->limit = buffer->data + RECV_BUF_SIZE;
+    buffer->limit = buffer->data + BUF_SIZE;
 }
 
 static inline void buffer_clear(buffer_t* buffer)

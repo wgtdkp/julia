@@ -11,32 +11,33 @@
 
 
 // Read data to buffer
-// Return: if haven't read eof, bytes readed; 
-//         else, 0 - readed;
+// Return: if haven't read eof, bytes read_n; 
+//         else, 0 - read_n;
 int buffer_recv(buffer_t* buffer, int fd)
 {
-    int readed = 0;
-    do {
+    assert(buffer->end < buffer->limit);
+    int read_n = 0;
+    while (buffer->end < buffer->limit) {
         int margin = buffer->limit - buffer->end;
         int len = recv(fd, buffer->end, margin, 0);
         if (len == 0)   // EOF
-            return -readed;
+            return -read_n;
         if (len == -1) {
             if (errno == EAGAIN)
                 break;
             perror("recv");
             return ERR_INTERNAL_ERROR;
         }
-        readed += len;
+        read_n += len;
         buffer->end += len;
-    } while (buffer->end < buffer->limit);  // We may have not read all data
-    return readed;
+    };  // We may have not read all data
+    return read_n;
 }
 
 int buffer_send(buffer_t* buffer, int fd)
 {
     int sent = 0;
-    do {
+    while (buffer_size(buffer) > 0) {
         int len = send(fd, buffer->begin, buffer_size(buffer), 0);
         if (len == -1) {
             if (errno == EAGAIN)
@@ -49,7 +50,9 @@ int buffer_send(buffer_t* buffer, int fd)
         }
         sent += len;
         buffer->begin += len;
-    } while (buffer_size(buffer) != 0);
+    };
+    if (buffer_size(buffer) == 0)
+        buffer_clear(buffer);
     return sent;
 }
 

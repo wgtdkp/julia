@@ -13,7 +13,7 @@ typedef union {
   uint64_t u64;
 } julia_epoll_data_t;
 
-typedef alignas(uint64_t) struct {
+typedef /* alignas(uint64_t) */ struct {
   uint32_t events;	/* Epoll events */
   alignas(uint32_t) julia_epoll_data_t data;	/* User data variable */
 } julia_epoll_event_t;

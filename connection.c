@@ -3,10 +3,11 @@
 int epoll_fd;
 julia_epoll_event_t events[MAX_EVENT_NUM];
 pool_t connection_pool;
+pool_t back_connection_pool;
 pool_t response_pool;
 pool_t accept_pool;
 
-static int set_nonblocking(int fd);
+int set_nonblocking(int fd);
 
 connection_t* open_connection(int fd, pool_t* pool)
 {
@@ -16,6 +17,7 @@ connection_t* open_connection(int fd, pool_t* pool)
 
     connection->pool = pool;
     connection->fd = fd;
+    connection->side = C_SIDE_FRONT;
     set_nonblocking(connection->fd);
     connection->event.events = EVENTS_IN;
     connection->event.data.ptr = connection;
@@ -48,7 +50,7 @@ int add_listener(int* listen_fd)
     return epoll_ctl(epoll_fd, EPOLL_CTL_ADD, *listen_fd, &ev);
 }
 
-static int set_nonblocking(int fd)
+int set_nonblocking(int fd)
 {
     int flag = fcntl(fd, F_GETFL, 0);
     EXIT_ON(flag == -1, "fcntl: F_GETFL");

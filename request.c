@@ -130,7 +130,7 @@ void request_init(request_t* request)
     request->content_length = -1;
     
     buffer_init(&request->buffer);
-    
+    request->pass = false;
     request->response = NULL;
 }
 
@@ -158,17 +158,16 @@ int handle_request(connection_t* connection)
         response_init(request->response);
     }
     
-    int readed = buffer_recv(buffer, connection->fd);
+    int read_n = buffer_recv(buffer, connection->fd);
     // Client closed the connection
-    if (readed <= 0) {
-        readed = -readed;
+    if (read_n <= 0) {
+        read_n = -read_n;
         close_connection(connection);
         return OK;
     }
     // Print request
-    if (buffer_size(buffer) > 0)
-        print_buffer(buffer);
-        //print_string("%*s", &(string_t){buffer->begin, buffer_size(buffer)});
+    //if (buffer_size(buffer) > 0)
+    //    print_buffer(buffer);
 
     if (err == OK && request->stage == RS_REQUEST_LINE) {
         err = request_handle_request_line(request, request->response);
@@ -182,18 +181,19 @@ int handle_request(connection_t* connection)
     if (err == OK && request->stage == RS_BODY) {
         err = request_handle_body(request, request->response);
         if (err != AGAIN) {
-            response_build(request->response, request);
+            response_build(request->response, connection);
         }
     }
     
     if (err == AGAIN)
         return err;
-    
+
+    assert(buffer_size(&request->response->buffer) == 0);
     queue_push(&connection->response_queue, request->response);
     request_clear(request);
     
-    // Send response(s) directly, until send buffer is full.
-    err = handle_response(connection);
+    // Try sending response(s) directly, until send buffer is full.
+    err = handle_response(connection, false);
     
     return err;
 }
@@ -220,13 +220,21 @@ static int request_handle_uri(request_t* request, response_t* response)
             request->port = atoi(uri->port.data);
     }
     uri->abs_path.data[uri->abs_path.len] = 0;  // It is safe to do this
-    request->loc = match_location(&uri->abs_path);
-    if (request->loc == NULL) {
-        response_build_err(response, request, 404);
-        return ERR_STATUS(response->status);
+
+    location_t* loc = match_location(&uri->abs_path);
+    if (loc == NULL) {
+        return response_build_err(response, request, 404);
     }
-    if (request->loc->pass)
+    request->pass = loc->pass;
+    if (request->pass) {
+        int fd = uwsgi_open_connection(loc);
+        if (fd == -1) {
+            return response_build_err(response, request, 404);
+        }
+        response->fetch_from_back = true;
+        response->resource_fd = fd;
         return OK;
+    }
     
     const char* rel_path;
     if (uri->abs_path.len == 1) { 
@@ -239,10 +247,8 @@ static int request_handle_uri(request_t* request, response_t* response)
     
     // Open the requested resource failed
     if (fd == -1) {
-        response_build_err(response, request, 404);
-        return ERR_STATUS(response->status);
+        return response_build_err(response, request, 404);
     }
-    
     struct stat* stat = &response->resource_stat;
     fstat(fd, stat);
     if (S_ISDIR(stat->st_mode)) {
@@ -251,8 +257,7 @@ static int request_handle_uri(request_t* request, response_t* response)
         close(tmp_fd); // FUCK ME !!!
         if (fd == -1) {
             // Accessing to a directory is forbidden
-            response_build_err(response, request, 403);
-            return ERR_STATUS(response->status);
+            return response_build_err(response, request, 403);
         }
         fstat(fd, &response->resource_stat);
         uri->extension = STRING("html");
@@ -271,16 +276,14 @@ static int request_handle_request_line(
         return err;
     } else if (err != OK) { // Reuqest line parsing error, can't recovery
         response->keep_alive = false;
-        response_build_err(response, request, 400);
-        return err;
+        return response_build_err(response, request, 400);
     }
     request->stage = RS_HEADERS;
     
     // Supports only HTTP/1.1 and HTTP/1.0
     if (request->version.major != 1 || request->version.minor > 2) {
         response->keep_alive = false;
-        response_build_err(response, request, 505);
-        return ERR_STATUS(response->status);
+        return response_build_err(response, request, 505);
     }
     
     // HTTP/1.1: persistent connection default
@@ -363,8 +366,7 @@ static int header_handle_t_encoding(
     } else {
         // Must close the connection as we can't understand the body
         response->keep_alive = false;
-        response_build_err(response, request, 415);
-        return ERR_STATUS(response->status);
+        return response_build_err(response, request, 415);
     }
     
     return OK;
@@ -382,8 +384,7 @@ static int header_handle_content_length(
     val->data[val->len] = 0;
     int len = atoi(val->data);
     if (len < 0) {
-        response_build_err(response, request, 400);
-        return ERR_STATUS(response->status);
+        return response_build_err(response, request, 400);
     }
     if (request->method == M_GET || request->method == M_HEAD) {
         request->discard_body = 1;
@@ -433,8 +434,7 @@ static int request_handle_body(request_t* request, response_t* response)
     case OK:
         break;
     default:
-        response_build_err(response, request, 400);
-        return ERR_STATUS(response->status);
+        return response_build_err(response, request, 400);
     }
 
     // Parse body done
@@ -473,8 +473,7 @@ int request_process_headers(request_t* request, response_t* response)
     // HTTP/1.1 must has the 'Host'' header
     if ((request->version.minor == 1 && headers->host.data == NULL)
         || request->host.data == NULL) {
-        response_build_err(response, request, 400);
-        return ERR_STATUS(response->status);
+        return response_build_err(response, request, 400);
     }
     
     if (headers->cache_control.data) {
@@ -491,8 +490,7 @@ int request_process_headers(request_t* request, response_t* response)
                     && !request->discard_body) {
                 response->status = 100;
             } else {
-                response_build_err(response, request, 417);
-                return ERR_STATUS(response->status);
+                return response_build_err(response, request, 417);
             }
         }
     }
@@ -526,8 +524,7 @@ int request_process_headers(request_t* request, response_t* response)
             if (tm_sec <= response->resource_stat.st_mtime) {
                 // RFC 2616 [14.28]
                 if (response->status / 100 == 2) {
-                    response_build_err(response, request, 417);
-                    return ERR_STATUS(response->status);
+                    return response_build_err(response, request, 417);
                 }
             }
         }

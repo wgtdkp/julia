@@ -252,13 +252,12 @@ void mime_map_init(void)
 void response_init(response_t* response)
 {
     response->resource_fd = -1;
-    
+    response->fetch_from_back = 0;
     response->status = 200;
     memset(&response->headers, 0, sizeof(response->headers));
     
     response->keep_alive = 1;
     buffer_init(&response->buffer);
-    response->loc = NULL;
 }
 
 void response_clear(response_t* response)
@@ -267,7 +266,7 @@ void response_clear(response_t* response)
         close(response->resource_fd);
 }
 
-int handle_response(connection_t* connection)
+int handle_response(connection_t* connection, bool event_in)
 {
     request_t* request = &connection->request;
 
@@ -279,11 +278,14 @@ int handle_response(connection_t* connection)
         }
 
         int close = !response->keep_alive;
-        if (request->loc->pass) {
-            buffer_send(&response->buffer, connection->fd);
-            close_connection(connection);
-            return OK;
-        } else if (put_response(connection->fd, response) == AGAIN) {
+        if (event_in) {
+            assert(response->fetch_from_back);
+            uwsgi_fetch_response(response);
+            // As there is new data now,
+            // we haven't done our work yet
+            return AGAIN;
+        }
+        if (put_response(connection->fd, response) == AGAIN) {
             // Response(s) not completely sent
             // Open EPOLLOUT event
             connection_enable_out(connection);
@@ -291,7 +293,9 @@ int handle_response(connection_t* connection)
         }
         
         queue_pop(&connection->response_queue);
-        if (close || !request->keep_alive) {
+        if (response->fetch_from_back // Always close when fetching from uwsgi 
+            || close
+            || !request->keep_alive) {
             // TODO(wgtdkp): set linger ?
             close_connection(connection);
             return CLOSED;
@@ -304,9 +308,11 @@ int handle_response(connection_t* connection)
 static int put_response(int fd, response_t* response)
 {
     buffer_t* buffer = &response->buffer;
-
     buffer_send(buffer, fd);
-    
+    if (response->fetch_from_back) {
+        // If fetched all data or not
+        return response->resource_fd == -1 ? OK: AGAIN;
+    }
     // All data in the buffer has been sent
     if (buffer_size(buffer) == 0
             // FIXME(wgtdkp): what if 404? resource_fd is always -1;
@@ -329,12 +335,12 @@ static int put_response(int fd, response_t* response)
     return AGAIN;
 }
 
-int response_build(response_t* response, request_t* request)
+int response_build(response_t* response, connection_t* connection)
 {
-    if (request->loc->pass) {
-        return uwsgi_takeover(response, request);
+    request_t* request = &connection->request;
+    if (request->pass) {
+        return uwsgi_takeover(connection);
     }
-
     buffer_t* buffer = &response->buffer;
     
     response_put_status_line(response, request);
@@ -406,7 +412,7 @@ static void response_put_date(response_t* response)
             "Date: %a, %d %b %Y %H:%M:%S GMT" CRLF, tm);
 }
 
-void response_build_err(response_t* response, request_t* request, int err)
+int response_build_err(response_t* response, request_t* request, int err)
 {
     int appended = 0;
     buffer_t* buffer = &response->buffer;
@@ -443,6 +449,8 @@ void response_build_err(response_t* response, request_t* request, int err)
                 &(string_t){err_page_tail, page_tail_len});
         assert(appended == page_tail_len);
     }
+
+    return -response->status;
 }
 
 static char* err_page(int status, int* len)

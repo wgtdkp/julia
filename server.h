@@ -42,8 +42,8 @@
 
 #define MAX_EVENT_NUM   (65536)
 
-#define EVENTS_IN   (EPOLLIN | EPOLLET)
-#define EVENTS_OUT  (EPOLLOUT | EPOLLET)
+#define EVENTS_IN   (EPOLLIN)
+#define EVENTS_OUT  (EPOLLOUT)
 
 extern int root_fd;
 extern int app_fd;
@@ -83,6 +83,7 @@ void config_destroy(config_t* cfg);
  */
 extern int epoll_fd;
 extern julia_epoll_event_t events[MAX_EVENT_NUM];
+extern pool_t back_connection_pool;
 extern pool_t connection_pool;
 extern pool_t response_pool;
 extern pool_t accept_pool;
@@ -151,9 +152,11 @@ typedef struct {
  * Response
  */
 typedef struct {
-    int resource_fd;
-    struct stat resource_stat;
     int status;
+    int resource_fd;
+    bool fetch_from_back;
+    struct back_connection* back_connection;
+    struct stat resource_stat;
     response_headers_t headers;
     // Connection must be closed after the response was sent.
     // This happens when we accept a bad syntax request, and
@@ -164,7 +167,6 @@ typedef struct {
     
     //response_headers_t headers;
     buffer_t buffer;
-    location_t* loc;
 } response_t;
 
 
@@ -247,17 +249,28 @@ typedef struct {
     int body_received;
     
     buffer_t buffer;
-    location_t* loc;
+    //location_t* loc;
+    bool pass;
     response_t* response;
 } request_t;
 
 /*
  * Connection
  */
- typedef struct {
-    int fd; // socket fd
-    julia_epoll_event_t event;
+#define CONNECTION_HEADER                       \
+struct {                                        \
+    int fd; /* socket fd */                     \
+    int side; /* Which wakeup the connection */ \
+} 
 
+enum {
+    C_SIDE_FRONT,
+    C_SIDE_BACK,
+};
+
+typedef struct {
+    CONNECTION_HEADER;
+    julia_epoll_event_t event;
     request_t request;
     queue_t response_queue;
     //response_t response;
@@ -268,6 +281,12 @@ typedef struct {
     pool_t* pool;
 } connection_t;
 
+struct back_connection {
+    CONNECTION_HEADER;
+    connection_t* front;
+};
+typedef struct back_connection back_connection_t;
+
 #define HTTP_1_1    (version_t){1, 1}
 #define HTTP_1_0    (version_t){1, 0}
 
@@ -275,7 +294,7 @@ typedef struct {
 connection_t* open_connection(int fd, pool_t* pool);
 void close_connection(connection_t* connection);
 int add_listener(int* listen_fd);
-
+int set_nonblocking(int fd);
 
 static inline int connection_disable_in(connection_t* connection)
 {
@@ -327,10 +346,9 @@ void mime_map_init(void);
 void response_init(response_t* response);
 void response_clear(response_t* response);
 
-int handle_response(connection_t* connection);
-int uwsgi_takeover(response_t* response, request_t* request);
-int response_build(response_t* response, request_t* request);
-void response_build_err(response_t* response, request_t* request, int err);
+int handle_response(connection_t* connection, bool event_in);
+int response_build(response_t* response, connection_t* connection);
+int response_build_err(response_t* response, request_t* request, int err);
 
 
 /*
@@ -393,14 +411,10 @@ int parse_header_accept(request_t* request);
 void parse_header_host(request_t* request);
 
 /*
- * Backend
- */
-void backend_close_connection(location_t* loc);
-void backend_open_connection(location_t* loc);
-
-/*
  * uWSGI
  */
-int uwsgi_takeover(response_t* response, request_t* request);
+int uwsgi_takeover(connection_t* connection);
+int uwsgi_open_connection(location_t* loc);
+int uwsgi_fetch_response(response_t* response);
 
 #endif

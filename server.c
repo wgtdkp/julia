@@ -78,6 +78,7 @@ static int server_init(char* cfg_file)
     header_map_init();
     mime_map_init();
     
+    pool_init(&back_connection_pool, sizeof(back_connection_t), 8, 0);
     pool_init(&connection_pool, sizeof(connection_t), 8, 0);
     pool_init(&response_pool, QUEUE_WIDTH(response_t), 8, 0);
     //pool_init(&accept_pool, LIST_WIDTH(accept_type_t), 4, 0);
@@ -172,13 +173,6 @@ work:
         fprintf(stderr, "startup server failed\n");
         exit(ERROR);
     }
-
-    for (int i = 0; i < server_cfg.locations.size; ++i) {
-        location_t* loc = vector_at(&server_cfg.locations, i);
-        if (loc->pass) {
-            backend_open_connection(loc);
-        }
-    }
     
     printf("julia started...\n");
     printf("listening at port: %u\n", server_cfg.port);
@@ -204,14 +198,19 @@ work:
                 // Receive request or data
                 ++total_reqs;
                 max_response = max(max_response, response_pool.nallocated);
-                connection_t* connection = (connection_t*)(events[i].data.ptr);
-                handle_request(connection);
+                back_connection_t* back_connection = events[i].data.ptr;
+                if (back_connection->side == C_SIDE_BACK) {
+                    handle_response(back_connection->front, true);
+                } else {
+                    connection_t* connection = events[i].data.ptr;
+                    handle_request(connection);
+                }
             }
             // TODO(wgtdkp): checking errors?
             if (events[i].events & EPOLLOUT) {
                 // Send response
                 connection_t* connection = (connection_t*)(events[i].data.ptr);
-                handle_response(connection);
+                handle_response(connection, false);
             }
         }
         total += clock() - begin;

@@ -17,8 +17,6 @@
 
 #define ERR_NOMEM           (-9)
 
-#define ERR_STATUS(status)  (-status)
-
 #define CRLF                "\r\n"
 
 #define EXIT_ON(cond, msg)  \
