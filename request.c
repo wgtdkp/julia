@@ -56,6 +56,7 @@ static header_nv_t header_tb[] = {
     HEADER_PAIR(accept_charset, header_handle_generic),
     HEADER_PAIR(accept_encoding, header_handle_generic),
     HEADER_PAIR(authorization, header_handle_generic),
+    HEADER_PAIR(cookie, header_handle_generic),
     HEADER_PAIR(expect, header_handle_generic),
     HEADER_PAIR(from, header_handle_generic),
     HEADER_PAIR(host, header_handle_host),
@@ -120,13 +121,13 @@ void request_init(request_t* request)
     uri_init(&request->uri);
     
     string_init(&request->host);
-    request->port_n = 80;
+    request->port = 80;
     
     request->stage = RS_REQUEST_LINE;
     request->state = RL_S_BEGIN; 
     request->keep_alive = false;
     request->t_encoding = TE_IDENTITY;
-    request->content_length_n = -1;
+    request->content_length = -1;
     
     buffer_init(&request->buffer);
     
@@ -164,9 +165,10 @@ int handle_request(connection_t* connection)
         close_connection(connection);
         return OK;
     }
-
-    //if (buffer_size(buffer) > 0)
-    //    print_string("%*s", &(string_t){buffer->begin, buffer->end});
+    // Print request
+    if (buffer_size(buffer) > 0)
+        print_buffer(buffer);
+        //print_string("%*s", &(string_t){buffer->begin, buffer_size(buffer)});
 
     if (err == OK && request->stage == RS_REQUEST_LINE) {
         err = request_handle_request_line(request, request->response);
@@ -196,17 +198,36 @@ int handle_request(connection_t* connection)
     return err;
 }
 
+static location_t* match_location(string_t* path)
+{
+    vector_t* locs = &server_cfg.locations;
+    for (int i = 0; i < locs->size; ++i) {
+        location_t* loc = vector_at(locs, i);
+        // The first matched location is returned
+        if (strncasecmp(loc->path.data, path->data, loc->path.len) == 0)
+            return loc;
+    }
+    //assert(false);
+    return NULL;
+}
+
 static int request_handle_uri(request_t* request, response_t* response)
 {
     uri_t* uri = &request->uri;
-
     if (uri->host.data) {
         request->host = uri->host;
         if (uri->port.data)
-            request->port_n = atoi(uri->port.data);
+            request->port = atoi(uri->port.data);
     }
-    
     uri->abs_path.data[uri->abs_path.len] = 0;  // It is safe to do this
+    request->loc = match_location(&uri->abs_path);
+    if (request->loc == NULL) {
+        response_build_err(response, request, 404);
+        return ERR_STATUS(response->status);
+    }
+    if (request->loc->pass)
+        return OK;
+    
     const char* rel_path;
     if (uri->abs_path.len == 1) { 
         rel_path = "./";
@@ -229,7 +250,8 @@ static int request_handle_uri(request_t* request, response_t* response)
         fd = openat(fd, "index.html", O_RDONLY);
         close(tmp_fd); // FUCK ME !!!
         if (fd == -1) {
-            response_build_err(response, request, 404);
+            // Accessing to a directory is forbidden
+            response_build_err(response, request, 403);
             return ERR_STATUS(response->status);
         }
         fstat(fd, &response->resource_stat);
@@ -285,6 +307,9 @@ static int request_handle_headers(request_t* request, response_t* response)
         case EMPTY_LINE:
             goto done;
         case OK: {
+            if (string_eq(&request->header_name, &STRING("content_length"))) {
+                printf("error");
+            }
             map_slot_t* slot = map_get(&header_map, &request->header_name);
             if (slot == NULL)
                 break;
@@ -295,7 +320,7 @@ static int request_handle_headers(request_t* request, response_t* response)
                 if (err != 0)
                     return err;
             }
-        } break; 
+        } break;
         default:
             assert(0);
         }
@@ -348,7 +373,14 @@ static int header_handle_t_encoding(
 static int header_handle_content_length(
         request_t* request, int offset, response_t* response)
 {
-    int len = atoi(request->headers.content_length.data);
+    assert(string_eq(&request->header_name, &STRING("content_length")));
+    header_handle_generic(request, offset, response);
+    //sring_t* name = &request->header_name;
+    string_t* val = &request->header_value;
+    // Header values are always terminated by '\r\n' or '\n'
+    // It means setting val->data[val->len] = 0 is safe
+    val->data[val->len] = 0;
+    int len = atoi(val->data);
     if (len < 0) {
         response_build_err(response, request, 400);
         return ERR_STATUS(response->status);
@@ -356,8 +388,7 @@ static int header_handle_content_length(
     if (request->method == M_GET || request->method == M_HEAD) {
         request->discard_body = 1;
     }
-        
-    request->content_length_n = len;
+    request->content_length = len;
     return OK;
 }
 

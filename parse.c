@@ -766,10 +766,10 @@ void parse_header_host(request_t* request)
     
     if (semicolon == NULL) {
         request->host = *host;
-        request->port_n = 80;
+        request->port = 80;
     } else {
         request->host = (string_t){host->data, semicolon - host->data};
-        request->port_n = atoi(semicolon + 1);
+        request->port = atoi(semicolon + 1);
     }
 }
 
@@ -869,20 +869,22 @@ int parse_request_body_chunked(request_t* request)
 
 int parse_request_body_identity(request_t* request)
 {
-    if (request->content_length_n <= 0)
+    if (request->content_length <= 0)
         return OK;
 
     buffer_t* buffer = &request->buffer;
-    request->body_received_n += buffer_size(buffer);
-    if (request->body_received_n >= request->content_length_n) {
+    request->body_received += buffer_size(buffer);
+    if (request->body_received >= request->content_length) {
         // Received full Body
         
         if (request->discard_body) {
             // There may be data belongs to the next request
-            buffer->begin += request->body_received_n - request->content_length_n;
-            request->body_done = 1;
-            return OK;
+            buffer->begin += request->body_received - request->content_length;
+            //request->body_done = 1;
+            //return OK;
         }
+        request->body_done = 1;
+        return OK;
     }
     
     return AGAIN;

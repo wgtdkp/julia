@@ -75,3 +75,11 @@ int buffer_print(buffer_t* buffer, const char* format, ...)
     return len;
 }
 
+void print_buffer(buffer_t* buffer)
+{
+    for(char* p = buffer->begin; p != buffer->end; ++p) {
+        printf("%c", *p);
+        fflush(stdout);
+    }
+    printf("\n");
+}

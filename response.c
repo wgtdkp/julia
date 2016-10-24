@@ -226,6 +226,7 @@ static string_t mime_tb [][2] = {
     {STRING("ico"),     STRING("image/x-icon")},
     {STRING("jpeg"),    STRING("image/jpeg")},
     {STRING("jpg"),     STRING("image/jpeg")},
+    {STRING("png"),     STRING("image/png")},
     {STRING("svg"),     STRING("image/svg+xml")},
     {STRING("txt"),     STRING("text/plain")},
     {STRING("zip"),     STRING("application/zip")},
@@ -257,6 +258,7 @@ void response_init(response_t* response)
     
     response->keep_alive = 1;
     buffer_init(&response->buffer);
+    response->loc = NULL;
 }
 
 void response_clear(response_t* response)
@@ -277,7 +279,11 @@ int handle_response(connection_t* connection)
         }
 
         int close = !response->keep_alive;
-        if (put_response(connection->fd, response) == AGAIN) {
+        if (request->loc->pass) {
+            buffer_send(&response->buffer, connection->fd);
+            close_connection(connection);
+            return OK;
+        } else if (put_response(connection->fd, response) == AGAIN) {
             // Response(s) not completely sent
             // Open EPOLLOUT event
             connection_enable_out(connection);
@@ -308,7 +314,6 @@ static int put_response(int fd, response_t* response)
         // TODO(wgtdkp): tansform to chunked if the file is too big
         
         while (1) {
-            // FIXME(wgtdkp): Blocked
             int len = sendfile(fd, response->resource_fd, NULL,
                     response->resource_stat.st_size);
             if (len == 0) {
@@ -324,22 +329,11 @@ static int put_response(int fd, response_t* response)
     return AGAIN;
 }
 
-int may_handle_dynamic(response_t* response, request_t* request)
-{
-    string_t* extension = &request->uri.extension;
-    if (string_eq(extension, &STRING("py"))) {
-        return uwsgi_takeover(response, request);
-    } else {
-        // TODO(wgtdkp): support more dynamic resource
-    }
-    return ERROR;
-}
-
 int response_build(response_t* response, request_t* request)
 {
-    int err = may_handle_dynamic(response, request);
-    if (err == OK)
-        return OK;
+    if (request->loc->pass) {
+        return uwsgi_takeover(response, request);
+    }
 
     buffer_t* buffer = &response->buffer;
     

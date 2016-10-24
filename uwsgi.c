@@ -10,8 +10,13 @@ int uwsgi_takeover(response_t* response, request_t* request)
 {
     //buffer_send(&request->buffer, app_fd);
     //buffer_recv(&response->buffer, app_fd);
-    uwsgi_start_request(app_fd, request);
-    uwsgi_handle_response(app_fd, response);
+    backend_open_connection(request->loc);
+    int fd = request->loc->fd;
+    uwsgi_start_request(fd, request);
+    uwsgi_handle_response(fd, response);
+    printf("%d\n", buffer_size(&response->buffer)); fflush(stdout);
+    //print_buffer(&response->buffer);
+    backend_close_connection(request->loc);
     return OK;
 }
 
@@ -33,47 +38,54 @@ static int uwsgi_start_request(int fd, request_t* request)
     request_headers_t* headers = &request->headers;
     string_t script_name = string_null;
     string_t path_info = string_null;
-    script_name.data = uri->abs_path.data;
-    if (uri->extension.len != 0) {
-        script_name.len = string_end(&uri->extension) - script_name.data;
-        path_info.data = string_end(&uri->extension);
-        path_info.len = string_end(&uri->abs_path) - string_end(&uri->extension);
-    } else {
-        //path_info.data =
-        assert(false); 
-    }
+    script_name = STRING("");
+    path_info = uri->abs_path; // STRING("");
+    //script_name.data = uri->abs_path.data;
+    //if (uri->extension.len != 0) {
+    //    script_name.len = string_end(&uri->extension) - script_name.data;
+    //    path_info.data = string_end(&uri->extension);
+    //    path_info.len = string_end(&uri->abs_path) - string_end(&uri->extension);
+    //} else {
+    //    //path_info.data =
+    //    assert(false); 
+    //}
 
     buffer_t buf;
     buffer_init(&buf);
-    uint16_t data_size = 0;
     buffer_append_u32le(&buf, 0);
     // Environments
     if (request->method == M_GET) {
-        data_size += uwsgi_buffer_append_kv(&buf, &STRING("REQUEST_METHOD"), &STRING("GET"));
+        uwsgi_buffer_append_kv(&buf, &STRING("REQUEST_METHOD"), &STRING("GET"));
     } else if (request->method == M_POST) {
-        data_size += uwsgi_buffer_append_kv(&buf, &STRING("REQUEST_METHOD"), &STRING("POST"));
+        uwsgi_buffer_append_kv(&buf, &STRING("REQUEST_METHOD"), &STRING("POST"));
     } else {
         assert(false);
     }
-
-    data_size += uwsgi_buffer_append_kv(&buf, &STRING("SCRIPT_NAME"), &script_name);
-    data_size += uwsgi_buffer_append_kv(&buf, &STRING("PATH_INFO"), &path_info);
-    data_size += uwsgi_buffer_append_kv(&buf, &STRING("QUERY_STRING"), &uri->query);
-    data_size += uwsgi_buffer_append_kv(&buf, &STRING("CONTENT_TYPE"), &headers->content_type);
-    data_size += uwsgi_buffer_append_kv(&buf, &STRING("CONTENT_LENGTH"), &headers->content_length);
-    data_size += uwsgi_buffer_append_kv(&buf, &STRING("HTTP_HOST"), &headers->host);
-    data_size += uwsgi_buffer_append_kv(&buf, &STRING("SERVER_NAME"), &uri->host);
-    data_size += uwsgi_buffer_append_kv(&buf, &STRING("SERVER_PORT"), &uri->port);
-    data_size += uwsgi_buffer_append_kv(&buf, &STRING("SERVER_PROTOCOL"), &STRING("HTTP/1.1"));
+    uwsgi_buffer_append_kv(&buf, &STRING("SCRIPT_NAME"), &script_name);
+    uwsgi_buffer_append_kv(&buf, &STRING("PATH_INFO"), &path_info);
+    uwsgi_buffer_append_kv(&buf, &STRING("QUERY_STRING"), &uri->query);
+    uwsgi_buffer_append_kv(&buf, &STRING("CONTENT_TYPE"), &headers->content_type);
+    uwsgi_buffer_append_kv(&buf, &STRING("CONTENT_LENGTH"), &headers->content_length);
+    uwsgi_buffer_append_kv(&buf, &STRING("HTTP_HOST"), &headers->host);
+    if (headers->cookie.len)
+        uwsgi_buffer_append_kv(&buf, &STRING("HTTP_COOKIE"), &headers->cookie);
+    uwsgi_buffer_append_kv(&buf, &STRING("SERVER_NAME"), &uri->host);
+    uwsgi_buffer_append_kv(&buf, &STRING("SERVER_PORT"), &uri->port);
+    uwsgi_buffer_append_kv(&buf, &STRING("SERVER_PROTOCOL"), &STRING("HTTP/1.1"));
 
     char* p = buf.begin + 1;
+    uint16_t data_size = buffer_size(&buf) - 4;
     *p++ = data_size & 0xff;
     *p++ = (data_size >> 8) & 0xff;
     
 
     // FIXME(wgtdkp): may blocked
     //while (buffer_size(&buf) > 0)
+
     buffer_send(&buf, fd);
+    // Send the body
+    assert(buffer_size(&request->buffer) == request->body_received);
+    buffer_send(&request->buffer, fd);
     return OK;
 }
 
@@ -87,8 +99,9 @@ static int uwsgi_handle_response(int fd, response_t* response)
     buffer_t* buffer = &response->buffer;
     buffer_recv(buffer, fd);
 
-    char* p = buffer->begin;
-    printf("%d\n", (uint8_t)*p);
+    //char* p = buffer->begin;
+    //printf("%d\n", (uint8_t)*p);
+    print_buffer(buffer);
     //buffer->begin += 4;
     //buffer_print(buffer);
     return OK;

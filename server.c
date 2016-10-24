@@ -194,10 +194,6 @@ work:
         clock_t begin = clock();
         //TODO(wgtdkp): multithreading here: seperate fds to several threads
         for (int i = 0; i < nfds; ++i) {
-            // Here is a hacking: 
-            // Eeven if events[i].data is set to pointer of connection,
-            // we can get it's fd correctly(as 'fd' is the first
-            // member of struct connection_t).
             int fd = *((int*)(events[i].data.ptr));
             if (fd == listen_fd) {
                 // We could accept more than one connection per request

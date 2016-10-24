@@ -8,8 +8,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define RECV_BUF_SIZE   (4 * 1024)
-#define SEND_BUF_SIZE   (4 * 1024)
+#define RECV_BUF_SIZE   (8 * 1024)
+#define SEND_BUF_SIZE   (8 * 1024)
 
 typedef struct {
     char* begin;
@@ -79,6 +79,7 @@ int buffer_recv(buffer_t* buffer, int fd);
 int buffer_send(buffer_t* buffer, int fd);
 int buffer_append_string(buffer_t* buffer, const string_t* str);
 int buffer_print(buffer_t* buffer, const char* format, ...);
+void print_buffer(buffer_t* buffer);
 
 #define buffer_append_cstring(buffer, cstr) buffer_append_string(buffer, &STRING(cstr))
 

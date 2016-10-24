@@ -11,7 +11,6 @@ void backend_open_connection(location_t* loc)
     bzero(&addr, sizeof(addr));
     addr.sin_family = AF_INET;
     addr.sin_port = htons(loc->port);
-    loc->host.data[loc->host.len] = 0;
     int success = inet_pton(AF_INET, loc->host.data, &addr.sin_addr);
     EXIT_ON(success <= 0, "inet_pton");
     

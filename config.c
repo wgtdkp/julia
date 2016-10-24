@@ -13,7 +13,9 @@ if ((cond)) {                       \
 
 static inline const string_t juson_val2str(juson_value_t* val)
 {
-    return (const string_t){(char*)val->sval, val->len};
+    string_t ret = {(char*)val->sval, val->len};
+    ret.data[ret.len] = 0;
+    return ret;
 }
 
 static void config_init(config_t* cfg)
@@ -26,6 +28,8 @@ int config_load(config_t* cfg, char* file_name)
     config_init(cfg);
 
     juson_doc_t json;
+    if (cfg->text)
+        free(cfg->text);
     cfg->text = juson_load(file_name);
     if (cfg->text == NULL) {
         ju_error("load file '%s' failed", file_name);

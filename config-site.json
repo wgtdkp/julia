@@ -3,7 +3,7 @@
      * If a directive is specified more than once,
      * the first one will be active.
      */
-    "port": 2000,
+    "port": 12345,
     "root": "www",
     /*
      * The order the locations specified, 
@@ -12,6 +12,9 @@
      * be specified before "/".
      */
     "locations": [
+        ["/", {
+            "index": ["index.html"]
+        }],
         ["/img/", {
             "index": ["index.html"]
         }],

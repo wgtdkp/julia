@@ -117,6 +117,7 @@ typedef struct {
     string_t accept_charset;
     string_t accept_encoding;
     string_t authorization;
+    string_t cookie;
     string_t expect;
     string_t from;
     string_t host;
@@ -163,7 +164,7 @@ typedef struct {
     
     //response_headers_t headers;
     buffer_t buffer;
-
+    location_t* loc;
 } response_t;
 
 
@@ -233,9 +234,7 @@ typedef struct {
     string_t header_value;
     uri_t uri;
     string_t host;
-    uint16_t port_n;
-    //string_t script_name;
-    //string_t path_info;
+    uint16_t port;
 
     request_stage_t stage;
     
@@ -244,16 +243,13 @@ typedef struct {
     uint8_t body_done: 1;
     
     transfer_encoding_t t_encoding;
-    int content_length_n;
-    int body_received_n;
-    
-    
+    int content_length;
+    int body_received;
     
     buffer_t buffer;
-    
+    location_t* loc;
     response_t* response;
 } request_t;
-
 
 /*
  * Connection
