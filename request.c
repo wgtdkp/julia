@@ -152,7 +152,6 @@ void request_release(request_t* request)
 
 int handle_request(connection_t* connection)
 {
-    int err = OK;
     request_t* request = &connection->request;
     buffer_t* buffer = &request->buffer;
     
@@ -161,41 +160,37 @@ int handle_request(connection_t* connection)
         response_init(request->response);
     }
     
-    int read_n = buffer_recv(buffer, connection->fd);
-    // Client closed the connection
-    if (read_n <= 0) {
-        read_n = -read_n;
+    int err = buffer_recv(buffer, connection->fd);
+    if (err != AGAIN) {
+        // Client closed the connection or error occcurred
         close_connection(connection);
         return OK;
     }
-    // Print request
-    if (buffer_size(buffer) > 0)
-        print_buffer(buffer);
-
-    if (err == OK && request->stage == RS_REQUEST_LINE) {
+    
+    if (request->stage == RS_REQUEST_LINE) {
         err = request_handle_request_line(request, request->response);
+        if (err == AGAIN) return AGAIN;
     }
     
-    if (err == OK && request->stage == RS_HEADERS) {
+    if (request->stage == RS_HEADERS) {
         err = request_handle_headers(request, request->response);
+        if (err == AGAIN) return AGAIN;
     }
     
     // TODO(wgtdkp): handle Expect: 100 continue before parse body
-    if (err == OK && request->stage == RS_BODY) {
+    if (request->stage == RS_BODY) {
         err = request_handle_body(request, request->response);
-        if (err != AGAIN) {
-            response_build(request->response, connection);
-        }
+        if (err == AGAIN) return AGAIN;
     }
-    
-    if (err == AGAIN)
-        return err;
 
+    if (err == OK) { // Error page may have already been built
+        response_build(request->response, connection);
+    }
     queue_push(&connection->response_queue, request->response);
     request_clear(request);
     
     // Try sending response(s) directly, until send buffer is full.
-    err = handle_response(connection, false);
+    err = handle_response(connection);
     
     return err;
 }
@@ -312,9 +307,6 @@ static int request_handle_headers(request_t* request, response_t* response)
         case EMPTY_LINE:
             goto done;
         case OK: {
-            if (string_eq(&request->header_name, &STRING("content_length"))) {
-                printf("error");
-            }
             map_slot_t* slot = map_get(&header_map, &request->header_name);
             if (slot == NULL)
                 break;

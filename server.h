@@ -283,7 +283,7 @@ typedef struct {
 
 struct back_connection {
     CONNECTION_HEADER;
-    connection_t* front;
+    response_t* response;
 };
 typedef struct back_connection back_connection_t;
 
@@ -298,30 +298,42 @@ int set_nonblocking(int fd);
 
 static inline int connection_disable_in(connection_t* connection)
 {
-    connection->event.events &= ~EVENTS_IN;
-    return epoll_ctl(epoll_fd, EPOLL_CTL_MOD,
-            connection->fd, &connection->event);
+    if (connection->event.events & EVENTS_IN) {
+        connection->event.events &= ~EVENTS_IN;
+        return epoll_ctl(epoll_fd, EPOLL_CTL_MOD,
+                         connection->fd, &connection->event);
+    }
+    return 0;
 }
 
 static inline int connection_enable_in(connection_t* connection)
 {
-    connection->event.events |= EVENTS_IN;
-    return epoll_ctl(epoll_fd, EPOLL_CTL_MOD,
-            connection->fd, &connection->event);
+    if (!(connection->event.events & EVENTS_IN)) {
+        connection->event.events |= EVENTS_IN;
+        return epoll_ctl(epoll_fd, EPOLL_CTL_MOD,
+                         connection->fd, &connection->event);
+    }
+    return 0;
 }
 
 static inline int connection_disable_out(connection_t* connection)
 {
-    connection->event.events &= ~EVENTS_OUT;
-    return epoll_ctl(epoll_fd, EPOLL_CTL_MOD,
-            connection->fd, &connection->event);
+    if (connection->event.events & EVENTS_OUT) {
+        connection->event.events &= ~EVENTS_OUT;
+        return epoll_ctl(epoll_fd, EPOLL_CTL_MOD,
+                         connection->fd, &connection->event);
+    }
+    return 0;
 }
 
 static inline int connection_enable_out(connection_t* connection)
 {
-    connection->event.events |= EVENTS_OUT;
-    return epoll_ctl(epoll_fd, EPOLL_CTL_MOD,
-            connection->fd, &connection->event);
+    if (!(connection->event.events & EVENTS_OUT)) {
+        connection->event.events |= EVENTS_OUT;
+        return epoll_ctl(epoll_fd, EPOLL_CTL_MOD,
+                         connection->fd, &connection->event);
+    }
+    return 0;
 } 
 
 /*
@@ -346,7 +358,7 @@ void mime_map_init(void);
 void response_init(response_t* response);
 void response_clear(response_t* response);
 
-int handle_response(connection_t* connection, bool event_in);
+int handle_response(connection_t* connection);
 int response_build(response_t* response, connection_t* connection);
 int response_build_err(response_t* response, request_t* request, int err);
 

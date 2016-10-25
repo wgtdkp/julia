@@ -199,8 +199,9 @@ work:
                 ++total_reqs;
                 max_response = max(max_response, response_pool.nallocated);
                 back_connection_t* back_connection = events[i].data.ptr;
+                // The event we register to epoll is a EPOLLIN of backend connection
                 if (back_connection->side == C_SIDE_BACK) {
-                    handle_response(back_connection->front, true);
+                    uwsgi_fetch_response(back_connection->response);
                 } else {
                     connection_t* connection = events[i].data.ptr;
                     handle_request(connection);
@@ -209,8 +210,8 @@ work:
             // TODO(wgtdkp): checking errors?
             if (events[i].events & EPOLLOUT) {
                 // Send response
-                connection_t* connection = (connection_t*)(events[i].data.ptr);
-                handle_response(connection, false);
+                connection_t* connection = events[i].data.ptr;
+                handle_response(connection);
             }
         }
         total += clock() - begin;

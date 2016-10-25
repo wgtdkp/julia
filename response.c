@@ -252,7 +252,7 @@ void mime_map_init(void)
 void response_init(response_t* response)
 {
     response->resource_fd = -1;
-    response->fetch_from_back = 0;
+    response->fetch_from_back = false;
     response->status = 200;
     memset(&response->headers, 0, sizeof(response->headers));
     
@@ -266,37 +266,29 @@ void response_clear(response_t* response)
         close(response->resource_fd);
 }
 
-int handle_response(connection_t* connection, bool event_in)
+int handle_response(connection_t* connection)
 {
     request_t* request = &connection->request;
 
     while (1) {
         response_t* response = queue_front(&connection->response_queue);
         if (response == NULL) {
+            // No response to be sent, remove the EPOLLOUT event
             connection_disable_out(connection);
             return OK;
         }
-
-        int close = !response->keep_alive;
-        if (event_in) {
-            assert(response->fetch_from_back);
-            uwsgi_fetch_response(response);
-            // As there is new data now,
-            // we haven't done our work yet
-            return AGAIN;
-        }
-        if (put_response(connection->fd, response) == AGAIN) {
+        int err = put_response(connection->fd, response);
+        if (err == AGAIN) {
             // Response(s) not completely sent
             // Open EPOLLOUT event
             connection_enable_out(connection);
             return AGAIN;
         }
-        
+        // Done or error
         queue_pop(&connection->response_queue);
-        if (response->fetch_from_back // Always close when fetching from uwsgi 
-            || close
-            || !request->keep_alive) {
-            // TODO(wgtdkp): set linger ?
+        if (err != OK                 || // Error occurred, force closing connection
+            response->fetch_from_back || // Always close when data is fetched from uwsgi 
+            !request->keep_alive) {
             close_connection(connection);
             return CLOSED;
         }
@@ -305,38 +297,50 @@ int handle_response(connection_t* connection, bool event_in)
     return OK;  // Make compiler happy
 }
 
+/* Return:
+ *  OK: have sent all data, and the connection may be closed
+ *  AGAIN: data not completely sent
+ *  ERROR: error occurred, the connection must be closed
+ */
 static int put_response(int fd, response_t* response)
 {
     buffer_t* buffer = &response->buffer;
-    buffer_send(buffer, fd);
+    int err = buffer_send(buffer, fd);
+    if (err == ERROR) return ERROR;
     if (response->fetch_from_back) {
-        // If fetched all data or not
-        if (response->resource_fd == -1) {
-            printf("\nresponse done\n");
+        // If have fetched all data or not
+        if (err == AGAIN)  {
+            // The buffer not completely sent
+            return AGAIN;
+        } else if (err == OK) {
+            // The buffer is completely sent,
+            //but the backend connection haven't been closed by uwsgi server
+            return response->resource_fd == -1 ? OK: AGAIN;
+        } else {
+            // Error occurred when sending buffer(may peer reset the connection)
+            return ERROR;
         }
-        return response->resource_fd == -1 ? OK: AGAIN;
     }
     // All data in the buffer has been sent
-    if (buffer_size(buffer) == 0
-            // FIXME(wgtdkp): what if 404? resource_fd is always -1;
-            && response->resource_fd != -1) {
-        // TODO(wgtdkp): tansform to chunked if the file is too big
-        
+    // FIXME(wgtdkp): what if 404? resource_fd is always -1;
+    // Remember that, data of 404 is in memory
+    if (err == OK && response->resource_fd != -1) {
+        // TODO(wgtdkp): tansform to chunked if the file is too big        
         while (1) {
             int len = sendfile(fd, response->resource_fd, NULL,
                     response->resource_stat.st_size);
             if (len == 0) {
                 response_clear(response);
-                printf("\nresponse done\n");
                 return OK;
             } else if (len < 0) {
                 if (errno == EAGAIN)
                     return AGAIN;
-                EXIT_ON(1, "sendfile");
+                ERR_ON(1, "sendfile");
+                return ERROR;
             }
         }
     }
-    return AGAIN;
+    return err;
 }
 
 int response_build(response_t* response, connection_t* connection)

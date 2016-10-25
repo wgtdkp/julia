@@ -16,27 +16,27 @@
 int buffer_recv(buffer_t* buffer, int fd)
 {
     assert(buffer->end < buffer->limit);
-    int read_n = 0;
+    //int read_n = 0;
     while (buffer->end < buffer->limit) {
         int margin = buffer->limit - buffer->end;
         int len = recv(fd, buffer->end, margin, 0);
         if (len == 0) // EOF
-            return -read_n;
+            return OK;
         if (len == -1) {
             if (errno == EAGAIN)
-                break;
+                return AGAIN;
             perror("recv");
-            return ERR_INTERNAL_ERROR;
+            return ERROR;
         }
-        read_n += len;
+        //read_n += len;
         buffer->end += len;
     };  // We may have not read all data
-    return read_n;
+    return AGAIN;
 }
 
 int buffer_send(buffer_t* buffer, int fd)
 {
-    int sent = 0;
+    //int sent = 0;
     while (buffer_size(buffer) > 0) {
         int len = send(fd, buffer->begin, buffer_size(buffer), 0);
         if (len == -1) {
@@ -46,14 +46,16 @@ int buffer_send(buffer_t* buffer, int fd)
                 // TODO(wgtdkp): the connection is broken
             }
             perror("send");
-            return ERR_INTERNAL_ERROR;
+            return ERROR;
         }
-        sent += len;
+        //sent += len;
         buffer->begin += len;
     };
-    if (buffer_size(buffer) == 0)
+    if (buffer_size(buffer) == 0) {
         buffer_clear(buffer);
-    return sent;
+        return OK;
+    }
+    return AGAIN;
 }
 
 int buffer_append_string(buffer_t* buffer, const string_t* str)

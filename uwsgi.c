@@ -11,6 +11,7 @@ int uwsgi_takeover(connection_t* connection)
     response_t* response = request->response;
     if (request->pass) {
         int err = uwsgi_start_request(response->resource_fd, connection);
+        // Ok or Error, the request will be sent only
         request->pass = false;
         if (err != OK)
             return err;
@@ -30,6 +31,11 @@ static int uwsgi_buffer_append_kv(buffer_t* buffer, string_t* k, string_t* v)
 #define UWSGI_KV_LEN(k, v)  (sizeof(k) - 1 + sizeof(v) - 1 + 2 + 2)
 #define UWSGI_KSV_LEN(k, v) (sizeof(k) -1 + (v)->len + 2 + 2)
 
+/*
+ * Return:
+ *  OK: done send request to uwsgi
+ *  others: errors
+ */
 static int uwsgi_start_request(int fd, connection_t* connection)
 {
     request_t* request = &connection->request;
@@ -73,7 +79,11 @@ static int uwsgi_start_request(int fd, connection_t* connection)
     // Blocking send
     // As the request from the client is buffered by julia,
     // blocking send should be fine.
-    buffer_send(&buf, fd);
+    // So the return value could only be OK or ERROR
+    print_buffer(&buf);
+    if (buffer_send(&buf, fd) != OK) {
+        return response_build_err(response, request, 404);
+    }
     // Send the body
     if (buffer_size(&request->buffer) != request->body_received) {
         print_buffer(&request->buffer);
@@ -82,13 +92,16 @@ static int uwsgi_start_request(int fd, connection_t* connection)
         fflush(stdout);
         assert(false);
     }
-    buffer_send(&request->buffer, fd);
+    print_buffer(&request->buffer);
+    if (buffer_send(&request->buffer, fd) != OK) {
+        return response_build_err(response, request, 404);
+    }
     
     set_nonblocking(fd);
     back_connection_t* back_connection = pool_alloc(&back_connection_pool);
     back_connection->fd = fd;
     back_connection->side = C_SIDE_BACK;
-    back_connection->front = connection;
+    back_connection->response = response;
     julia_epoll_event_t event = {
         .events = EVENTS_IN,
         .data.ptr = back_connection
@@ -112,10 +125,9 @@ int uwsgi_fetch_response(response_t* response)
         return OK; // Have already fetched all data
     buffer_t* buffer = &response->buffer;
     // If use epoll level trigger, data may be lost here
-    int read_n = buffer_recv(buffer, response->resource_fd);
-    //print_buffer(buffer);    
-    if (read_n <= 0) { // We done fetch the whole response from backend
-        read_n = -read_n;
+    int err = buffer_recv(buffer, response->resource_fd);
+    print_buffer(buffer);    
+    if (err != AGAIN) { // We done fetch the whole response from backend
         // The connection to backend have already been closed by uwsgi server
         close(response->resource_fd); // The registered events auto removed
         response->resource_fd = -1;
