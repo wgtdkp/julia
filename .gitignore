@@ -39,3 +39,4 @@
 .vscode
 www
 libfcgi
+build/
