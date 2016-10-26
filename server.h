@@ -37,6 +37,8 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+
+#include <sys/sendfile.h>
 #include <sys/un.h>
 
 
@@ -46,7 +48,6 @@
 #define EVENTS_OUT  (EPOLLOUT)
 
 extern int root_fd;
-extern int app_fd;
 
 /*
  * Config
@@ -83,16 +84,15 @@ void config_destroy(config_t* cfg);
  */
 extern int epoll_fd;
 extern julia_epoll_event_t events[MAX_EVENT_NUM];
-extern pool_t back_connection_pool;
 extern pool_t connection_pool;
-extern pool_t response_pool;
+extern pool_t request_pool;
 extern pool_t accept_pool;
 
 
 #define COMMON_HEADERS              \
     /* General headers */           \
     string_t cache_control;         \
-    string_t connection;            \
+    string_t c;            \
     string_t date;                  \
     string_t pragma;                \
     string_t trailer;               \
@@ -151,9 +151,12 @@ typedef struct {
 /*
  * Response
  */
+/*
 typedef struct {
     int status;
     int resource_fd;
+    int body_fd;
+    int body_len;
     bool fetch_from_back;
     struct back_connection* back_connection;
     struct stat resource_stat;
@@ -163,12 +166,12 @@ typedef struct {
     // cannot recover from this status. Because we immediately
     // discard the request and we thus cannot decide the end
     // of the bad request or the beginning of next request.
-    uint8_t keep_alive: 1;
+    bool keep_alive;
     
     //response_headers_t headers;
     buffer_t buffer;
 } response_t;
-
+*/
 
 /*
  * Request
@@ -188,6 +191,8 @@ typedef enum {
     RS_REQUEST_LINE,
     RS_HEADERS,
     RS_BODY,
+    RS_PASS_HEADERS,
+    RS_PASS_BODY,
 } request_stage_t;
 
 // Tranfer coding
@@ -222,11 +227,11 @@ typedef struct {
     int state;
 } uri_t;
 
-typedef struct {
+
+typedef struct request {
     method_t method;
     version_t version;
     request_headers_t headers;
-    //int status;
     list_t accepts;
 
     // For state machine
@@ -240,98 +245,87 @@ typedef struct {
 
     request_stage_t stage;
     
-    uint8_t keep_alive: 1;
     uint8_t discard_body: 1;
     uint8_t body_done: 1;
-    
+    uint8_t done: 1;
+    uint8_t response_done: 1;
+    uint8_t keep_alive: 1;
+
     transfer_encoding_t t_encoding;
     int content_length;
     int body_received;
     
-    buffer_t buffer;
-    //location_t* loc;
     bool pass;
-    response_t* response;
+    buffer_t rb;
+    buffer_t sb;
+    struct connection* c;
+    struct connection* uc;
+    //typedef int (*request_handler_t)(struct request* r);
+    int (*in_handler)(struct request* r);
+    int (*out_handler)(struct request* r);
+    //request_handler_t* pass_handler;
+    //request_handler_t* fetch_handler;
+
+    int status;
+    int resource_fd;
+    int resource_len;
 } request_t;
 
 /*
  * Connection
  */
-#define CONNECTION_HEADER                       \
-struct {                                        \
-    int fd; /* socket fd */                     \
-    int side; /* Which wakeup the connection */ \
-} 
-
 enum {
     C_SIDE_FRONT,
     C_SIDE_BACK,
 };
 
-typedef struct {
-    CONNECTION_HEADER;
+typedef struct connection {
+    int fd;
+    int side;
     julia_epoll_event_t event;
-    request_t request;
-    queue_t response_queue;
-    //response_t response;
-    int nrequests;  // # request during this connection
-
-    // TODO(wgtdkp): expire time
-
-    pool_t* pool;
+    request_t* r;
 } connection_t;
-
-struct back_connection {
-    CONNECTION_HEADER;
-    response_t* response;
-};
-typedef struct back_connection back_connection_t;
 
 #define HTTP_1_1    (version_t){1, 1}
 #define HTTP_1_0    (version_t){1, 0}
 
-
-connection_t* open_connection(int fd, pool_t* pool);
-void close_connection(connection_t* connection);
+connection_t* open_connection(int fd);
+void close_connection(connection_t* c);
 int add_listener(int* listen_fd);
 int set_nonblocking(int fd);
 
-static inline int connection_disable_in(connection_t* connection)
-{
-    if (connection->event.events & EVENTS_IN) {
-        connection->event.events &= ~EVENTS_IN;
+static inline int connection_disable_in(connection_t* c) {
+    if (c->event.events & EVENTS_IN) {
+        c->event.events &= ~EVENTS_IN;
         return epoll_ctl(epoll_fd, EPOLL_CTL_MOD,
-                         connection->fd, &connection->event);
+                         c->fd, &c->event);
     }
     return 0;
 }
 
-static inline int connection_enable_in(connection_t* connection)
-{
-    if (!(connection->event.events & EVENTS_IN)) {
-        connection->event.events |= EVENTS_IN;
+static inline int connection_enable_in(connection_t* c) {
+    if (!(c->event.events & EVENTS_IN)) {
+        c->event.events |= EVENTS_IN;
         return epoll_ctl(epoll_fd, EPOLL_CTL_MOD,
-                         connection->fd, &connection->event);
+                         c->fd, &c->event);
     }
     return 0;
 }
 
-static inline int connection_disable_out(connection_t* connection)
-{
-    if (connection->event.events & EVENTS_OUT) {
-        connection->event.events &= ~EVENTS_OUT;
+static inline int connection_disable_out(connection_t* c) {
+    if (c->event.events & EVENTS_OUT) {
+        c->event.events &= ~EVENTS_OUT;
         return epoll_ctl(epoll_fd, EPOLL_CTL_MOD,
-                         connection->fd, &connection->event);
+                         c->fd, &c->event);
     }
     return 0;
 }
 
-static inline int connection_enable_out(connection_t* connection)
-{
-    if (!(connection->event.events & EVENTS_OUT)) {
-        connection->event.events |= EVENTS_OUT;
+static inline int connection_enable_out(connection_t* c) {
+    if (!(c->event.events & EVENTS_OUT)) {
+        c->event.events |= EVENTS_OUT;
         return epoll_ctl(epoll_fd, EPOLL_CTL_MOD,
-                         connection->fd, &connection->event);
+                         c->fd, &c->event);
     }
     return 0;
 } 
@@ -339,28 +333,25 @@ static inline int connection_enable_out(connection_t* connection)
 /*
  * Request
  */
-typedef int (*header_processor_t)
-        (request_t* request, int offset, response_t* response);
-
+typedef int (*header_processor_t)(request_t* request, int offset);
 void header_map_init(void);
-
-void request_init(request_t* request);
+void request_init(request_t* r, connection_t* c);
 void request_clear(request_t* request);
 void request_release(request_t* request);
-
-int handle_request(connection_t* connection);
-
+int handle_request(connection_t* c);
+int handle_response(connection_t* c);
+int handle_pass(connection_t* uc);
+int handle_upstream(connection_t* uc);
+int send_response_buffer(request_t* r);
+int send_response_file(request_t* r);
 /*
  * Response
  */
 void mime_map_init(void);
 
-void response_init(response_t* response);
-void response_clear(response_t* response);
-
-int handle_response(connection_t* connection);
-int response_build(response_t* response, connection_t* connection);
-int response_build_err(response_t* response, request_t* request, int err);
+//int handle_response(connection_t* c);
+int response_build(request_t* r);
+int response_build_err(request_t* request, int err);
 
 
 /*
@@ -425,8 +416,7 @@ void parse_header_host(request_t* request);
 /*
  * uWSGI
  */
-int uwsgi_takeover(connection_t* connection);
-int uwsgi_open_connection(location_t* loc);
-int uwsgi_fetch_response(response_t* response);
+//int uwsgi_start_request(connection_t* c);
+int uwsgi_open_connection(request_t* r, location_t* loc);
 
 #endif

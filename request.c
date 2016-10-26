@@ -1,27 +1,17 @@
 #include "server.h"
 
-static int request_handle_uri(request_t* request, response_t* response);
-static int request_handle_request_line(
-        request_t* request, response_t* response);
-static int request_handle_headers(request_t* request, response_t* response);
-static int request_handle_body(request_t* request, response_t* response);
-
-static int header_handle_generic(
-        request_t* request, int offset, response_t* response);
-static int header_handle_connection(
-        request_t* request, int offset, response_t* response);
-static int header_handle_t_encoding(
-        request_t* request, int offset, response_t* response);
-static int header_handle_content_length(
-        request_t* request, int offset, response_t* response);
-static int header_handle_host(
-        request_t* request, int offset, response_t* response);
-static int header_handle_accept(
-        request_t* request, int offset, response_t* response);
-static int header_handle_if_modified_since(
-        request_t* request, int offset, response_t* response);
-
-static int request_process_headers(request_t* request, response_t* response);
+static int request_handle_uri(request_t* r);
+static int request_handle_request_line(request_t* r);
+static int request_handle_headers(request_t* r);
+static int request_handle_body(request_t* r);
+static int header_handle_generic(request_t* r, int offset);
+static int header_handle_connection(request_t* r, int offset);
+static int header_handle_t_encoding(request_t* r, int offset);
+static int header_handle_content_length(request_t* r, int offset);
+static int header_handle_host(request_t* r, int offset);
+static int header_handle_accept(request_t* r, int offset);
+static int header_handle_if_modified_since(request_t* r, int offset);
+//static int request_process_headers(request_t* r);
 
 typedef struct {
     string_t name;
@@ -33,7 +23,7 @@ typedef struct {
     
 static header_nv_t header_tb[] = {
     HEADER_PAIR(cache_control, header_handle_generic),
-    HEADER_PAIR(connection, header_handle_connection),
+    HEADER_PAIR(c, header_handle_connection),
     HEADER_PAIR(date, header_handle_generic),
     HEADER_PAIR(pragma, header_handle_generic),
     HEADER_PAIR(trailer, header_handle_generic),
@@ -84,8 +74,7 @@ static map_t header_map = {
     .cur = header_map_data + HEADER_MAP_SIZE
 };
 
-void header_map_init(void)
-{
+void header_map_init(void) {
     int n = sizeof(header_tb) / sizeof(header_tb[0]);
     for (int i = 0; i < n; ++i) {
         map_val_t val;
@@ -94,8 +83,7 @@ void header_map_init(void)
     }
 }
 
-static inline void uri_init(uri_t* uri)
-{
+static inline void uri_init(uri_t* uri) {
     memset(uri, 0, sizeof(uri_t));
     uri->state = URI_S_BEGIN;
 }
@@ -103,100 +91,190 @@ static inline void uri_init(uri_t* uri)
 /*
  * Request
  */
+void request_init(request_t* r, connection_t* c) {
+    r->method = M_GET;    // Any value is ok
+    r->version.major = 0;
+    r->version.minor = 0;
 
-void request_init(request_t* request)
-{
-    request->method = M_GET;    // Any value is ok
-    request->version.major = 0;
-    request->version.minor = 0;
+    memset(&r->headers, 0, sizeof(r->headers));
+    list_init(&r->accepts, &accept_pool);
+    
+    r->state = RL_S_BEGIN;
+    string_init(&r->request_line);
+    string_init(&r->header_name);
+    string_init(&r->header_value);
+    uri_init(&r->uri);
+    string_init(&r->host);
+    r->port = 80;
+    
+    r->stage = RS_REQUEST_LINE;
+     
+    r->discard_body = false;
+    r->body_done = false;
+    r->done = false;
+    r->response_done = false;
+    r->keep_alive = false;
 
-    memset(&request->headers, 0, sizeof(request->headers));
+    r->t_encoding = TE_IDENTITY;
+    r->content_length = -1;
+    r->body_received = 0;
     
-    list_init(&request->accepts, &accept_pool);
-    
-    string_init(&request->request_line);
-    string_init(&request->header_name);
-    string_init(&request->header_value);
-    
-    uri_init(&request->uri);
-    
-    string_init(&request->host);
-    request->port = 80;
-    
-    request->stage = RS_REQUEST_LINE;
-    request->state = RL_S_BEGIN; 
-    request->keep_alive = false;
-    request->discard_body = false;
-    request->body_done = false;
-    request->t_encoding = TE_IDENTITY;
-    request->content_length = -1;
-    request->body_received = 0;
-    
-    buffer_init(&request->buffer);
-    request->pass = false;
-    request->response = NULL;
+    r->pass = false;
+    buffer_init(&r->rb);
+    buffer_init(&r->sb);
+    r->c = c;
+    r->uc = NULL;
+    r->in_handler = request_handle_request_line;
+    r->out_handler = send_response_buffer;
+    //r->pass_handler = NULL;
+    //r->fetch_handler = NULL;
+
+    r->status = 200;
+    r->resource_fd = -1;
+    r->resource_len = 0;
 }
 
-void request_clear(request_t* request)
-{
-    int tmp = request->keep_alive;
-    request_init(request);
-    request->keep_alive = tmp;
+void request_clear(request_t* r) {
+    connection_t* c = r->c;
+    connection_t* uc = r->uc;
+    request_init(r, c);
+    r->c = c;
+    r->uc = uc;
 }
 
-void request_release(request_t* request)
-{
+void request_release(request_t* r) {
     // TODO(wgtdkp): release dynamic allocated resource
     // TODO(wgtdkp): ther won't by any dynamic allocated resource!!!
 }
 
-int handle_request(connection_t* connection)
-{
-    request_t* request = &connection->request;
-    buffer_t* buffer = &request->buffer;
-    
-    if (request->response == NULL) {
-        request->response = queue_alloc(&connection->response_queue);
-        response_init(request->response);
+// Send recived data to backend
+int handle_pass(connection_t* uc) {
+    request_t* r = uc->r;
+    buffer_t* b = &r->rb;
+    int err = buffer_send(b, uc->fd);
+    if (err == OK) {
+        // Remove the EPOLLOUT event of upstream side
+        // Done send all data
+        buffer_clear(b);
+        connection_enable_in(r->c);
+        connection_disable_out(uc);
+        if (r->body_done) {
+            connection_enable_in(uc);
+        }
+    } else if (err == ERROR) {
+        // The connection has been closed by peer
+        close_connection(uc);
+        // May use better error code
+        response_build_err(r, 503);
     }
-    
-    int err = buffer_recv(buffer, connection->fd);
-    if (err != AGAIN) {
-        // Client closed the connection or error occcurred
-        close_connection(connection);
-        return OK;
-    }
-    
-    if (request->stage == RS_REQUEST_LINE) {
-        err = request_handle_request_line(request, request->response);
-        if (err == AGAIN) return AGAIN;
-    }
-    
-    if (request->stage == RS_HEADERS) {
-        err = request_handle_headers(request, request->response);
-        if (err == AGAIN) return AGAIN;
-    }
-    
-    // TODO(wgtdkp): handle Expect: 100 continue before parse body
-    if (request->stage == RS_BODY) {
-        err = request_handle_body(request, request->response);
-        if (err == AGAIN) return AGAIN;
-    }
-
-    if (err == OK) { // Error page may have already been built
-        response_build(request->response, connection);
-    }
-    queue_push(&connection->response_queue, request->response);
-    request_clear(request);
-    
-    // Try sending response(s) directly, until send buffer is full.
-    err = handle_response(connection);
-    
     return err;
 }
 
-static location_t* match_location(string_t* path)
-{
+// The upstream connection is closed every response finished
+int handle_upstream(connection_t* uc) {
+    request_t* r = uc->r;
+    buffer_t* b = &r->sb;
+    int err = buffer_recv(b, uc->fd);
+    if (err == OK) {
+        // The connection has been closed by peer
+        close_connection(uc);
+    } else if (err == ERROR) {
+        close_connection(uc);
+        // Error in backend
+        response_build_err(r, 503);
+    } else if (buffer_full(b)) {
+        //connection_disable_in(uc);
+    }
+    connection_enable_out(r->c);
+    return err;
+}
+
+int send_response_buffer(request_t* r) {
+    connection_t* c= r->c;
+    buffer_t* b = &r->sb;
+    int err = buffer_send(b, c->fd);
+    if (err == OK) {
+        buffer_clear(b);
+        if (r->pass) {
+            if (r->uc == NULL) {
+                // Have send all data from back side
+                //close_connection(c);
+                r->response_done = true;
+                return OK;           
+            }
+            return AGAIN;
+        } else if (r->resource_fd != -1) {
+            r->out_handler = send_response_file;
+            return OK;
+        }
+        r->response_done = true;
+        return OK;
+    } else if (err == ERROR) {
+        close_connection(c);
+        return ERROR;
+    }
+    return AGAIN;
+}
+
+int send_response_file(request_t* r) {
+    connection_t* c = r->c;
+    assert(!r->pass);
+    int fd = c->fd;
+    while (1) {
+        int len = sendfile(fd, r->resource_fd, NULL, r->resource_len);
+        if (len == 0) {
+            // Have send the whole file
+            r->response_done = true;
+            close(r->resource_fd);
+            r->resource_fd = -1;
+            return OK;
+        } else if (len < 0) {
+            if (errno == EAGAIN)
+                return AGAIN;
+            ERR_ON(1, "sendfile");
+            close_connection(c);
+            return ERROR;
+        }
+    }
+    return OK; // Make compiler happy
+}
+
+int handle_response(connection_t* c) {
+    request_t* r = c->r;
+    int err;
+    do {
+        err = r->out_handler(r);
+    } while (err == OK && !r->response_done);
+    if (r->response_done) {
+        if (r->pass || !r->keep_alive) {
+            close_connection(c);
+        } else if (!r->pass) {
+            connection_enable_in(c);
+            connection_disable_out(c);
+            request_clear(r);
+        }
+    }
+    return err;
+}
+
+int handle_request(connection_t* c) {
+    request_t* r = c->r;
+    buffer_t* b = &r->rb;
+    int err = buffer_recv(b, c->fd);
+    //print_buffer(buffer);
+    if (err != AGAIN) {
+        // Client closed the connection or error occcurred
+        close_connection(c);
+        return OK;
+    }
+    
+    do {
+        err = r->in_handler(r);
+    } while (err == OK && !r->body_done);
+    return err;
+}
+
+static location_t* match_location(string_t* path) {
     vector_t* locs = &server_cfg.locations;
     for (int i = 0; i < locs->size; ++i) {
         location_t* loc = vector_at(locs, i);
@@ -208,32 +286,32 @@ static location_t* match_location(string_t* path)
     return NULL;
 }
 
-static int request_handle_uri(request_t* request, response_t* response)
-{
-    uri_t* uri = &request->uri;
+static int request_handle_uri(request_t* r) {
+    uri_t* uri = &r->uri;
     if (uri->host.data) {
-        request->host = uri->host;
-        if (uri->port.data)
-            request->port = atoi(uri->port.data);
+        r->host = uri->host;
+        if (uri->port.data) {
+            r->port = atoi(uri->port.data);
+        }
     }
-    uri->abs_path.data[uri->abs_path.len] = 0;  // It is safe to do this
-
+    
     location_t* loc = match_location(&uri->abs_path);
     if (loc == NULL) {
-        return response_build_err(response, request, 404);
+        return response_build_err(r, 404);
     }
-    request->pass = loc->pass;
-    if (request->pass) {
-        int fd = uwsgi_open_connection(loc);
+    r->pass = loc->pass;
+    if (r->pass) {
+        int fd = uwsgi_open_connection(r, loc);
         if (fd == -1) {
-            return response_build_err(response, request, 404);
+            r->pass = false;
+            return response_build_err(r, 503);
         }
-        response->fetch_from_back = true;
-        response->resource_fd = fd;
         return OK;
     }
     
     const char* rel_path;
+    // It is safe to do this, as we are not proxy now
+    uri->abs_path.data[uri->abs_path.len] = 0;
     if (uri->abs_path.len == 1) { 
         rel_path = "./";
     } else {
@@ -244,76 +322,66 @@ static int request_handle_uri(request_t* request, response_t* response)
     
     // Open the requested resource failed
     if (fd == -1) {
-        return response_build_err(response, request, 404);
+        return response_build_err(r, 404);
     }
-    struct stat* stat = &response->resource_stat;
-    fstat(fd, stat);
-    if (S_ISDIR(stat->st_mode)) {
+    struct stat st;
+    fstat(fd, &st);
+    if (S_ISDIR(st.st_mode)) {
         int tmp_fd = fd;
         fd = openat(fd, "index.html", O_RDONLY);
         close(tmp_fd); // FUCK ME !!!
         if (fd == -1) {
             // Accessing to a directory is forbidden
-            return response_build_err(response, request, 403);
+            return response_build_err(r, 403);
         }
-        fstat(fd, &response->resource_stat);
+        fstat(fd, &st);
         uri->extension = STRING("html");
     }
-
-    response->resource_fd = fd;
+    r->resource_fd = fd;
+    r->resource_len = st.st_size;    
     return OK;
 }
 
-static int request_handle_request_line(
-        request_t* request,
-        response_t* response)
-{
-    int err = parse_request_line(request);
+static int request_handle_request_line(request_t* r) {
+    int err = parse_request_line(r);
     if (err == AGAIN) {
         return err;
-    } else if (err != OK) { // Reuqest line parsing error, can't recovery
-        response->keep_alive = false;
-        return response_build_err(response, request, 400);
+    } else if (err != OK) {
+        // Reuqest line parsing error, can't recovery
+        return response_build_err(r, 400);
     }
-    request->stage = RS_HEADERS;
-    
-    // Supports only HTTP/1.1 and HTTP/1.0
-    if (request->version.major != 1 || request->version.minor > 2) {
-        response->keep_alive = false;
-        return response_build_err(response, request, 505);
+    // Supports only HTTP/1.1
+    if (r->version.major != 1 || r->version.minor > 2) {
+        return response_build_err(r, 505);
     }
     
-    // HTTP/1.1: persistent connection default
-    if (request->version.minor == 1)
-        request->keep_alive = 1;
-    else
-        request->keep_alive = 0;
+    // HTTP/1.1: persistent c default
+    r->keep_alive = r->version.minor == 1;
 
     // TODO(wgtdkp): check method
-    
-    // We still need to receive the left part of this request
-    // Thus, the connection will hold
-    return request_handle_uri(request, response);
+    // We still need to receive the left part of this r
+    // Thus, the c will hold
+    r->in_handler = request_handle_headers;
+    return request_handle_uri(r);
 }
 
-static int request_handle_headers(request_t* request, response_t* response)
-{
+static int request_handle_headers(request_t* r) {
     int err;
     while (true) {
-        err = parse_header_line(request);
+        err = parse_header_line(r);
         switch (err) {
         case AGAIN:
             return AGAIN;
         case EMPTY_LINE:
             goto done;
         case OK: {
-            map_slot_t* slot = map_get(&header_map, &request->header_name);
+            map_slot_t* slot = map_get(&header_map, &r->header_name);
             if (slot == NULL)
                 break;
             header_val_t header = slot->val.header;
             if (header.offset != -1) {
                 header_processor_t processor = header.processor;
-                int err = processor(request, header.offset, response);
+                int err = processor(r, header.offset);
                 if (err != 0)
                     return err;
             }
@@ -324,150 +392,142 @@ static int request_handle_headers(request_t* request, response_t* response)
     }
     
 done:
-    err = request_process_headers(request, response);
-    request->stage = RS_BODY;
-    return err;
-}
-
-static int header_handle_connection(
-        request_t* request, int offset, response_t* response)
-{
-    header_handle_generic(request, offset, response);
-    request_headers_t* headers = &request->headers;
-    if(strncasecmp("close", headers->connection.data, 5) == 0)
-        request->keep_alive = 0;
+    //if (r->pass) {
+    //    uwsgi_open_connection();
+    //}
+    r->in_handler = request_handle_body;
     return OK;
 }
 
-static int header_handle_t_encoding(
-        request_t* request, int offset, response_t* response)
-{
-    header_handle_generic(request, offset, response);
+static int header_handle_connection(request_t* r, int offset) {
+    header_handle_generic(r, offset);
+    request_headers_t* headers = &r->headers;
+    if(strncasecmp("close", headers->c.data, 5) == 0)
+        r->keep_alive = false;
+    return OK;
+}
+
+static int header_handle_t_encoding(request_t* r, int offset) {
+    header_handle_generic(r, offset);
     
-    string_t* transfer_encoding = &request->headers.transfer_encoding;
+    string_t* transfer_encoding = &r->headers.transfer_encoding;
     if (strncasecmp("chunked", transfer_encoding->data, 7) == 0) {
-        request->t_encoding = TE_CHUNKED;
+        r->t_encoding = TE_CHUNKED;
     } else if (strncasecmp("gzip", transfer_encoding->data, 4) == 0
             || strncasecmp("x-gzip", transfer_encoding->data, 6) == 0) {
-        request->t_encoding = TE_GZIP;            
+        r->t_encoding = TE_GZIP;            
     } else if (strncasecmp("compress", transfer_encoding->data, 8) == 0
             || strncasecmp("x-compress", transfer_encoding->data, 10) == 0) {
-        request->t_encoding = TE_COMPRESS;            
+        r->t_encoding = TE_COMPRESS;            
     } else if (strncasecmp("deflate", transfer_encoding->data, 7) == 0) {
-        request->t_encoding = TE_DEFLATE;   
+        r->t_encoding = TE_DEFLATE;
     } else if (strncasecmp("identity", transfer_encoding->data, 8) == 0) {
-        request->t_encoding = TE_IDENTITY;
+        r->t_encoding = TE_IDENTITY;
     } else {
-        // Must close the connection as we can't understand the body
-        response->keep_alive = false;
-        return response_build_err(response, request, 415);
+        // Must close the c as we can't understand the body
+        r->keep_alive = false;
+        return response_build_err(r, 415);
     }
     
     return OK;
 }
 
-static int header_handle_content_length(
-        request_t* request, int offset, response_t* response)
-{
-    assert(string_eq(&request->header_name, &STRING("content_length")));
-    header_handle_generic(request, offset, response);
-    //sring_t* name = &request->header_name;
-    string_t* val = &request->header_value;
-    // Header values are always terminated by '\r\n' or '\n'
-    // It means setting val->data[val->len] = 0 is safe
-    val->data[val->len] = 0;
+static int header_handle_content_length(request_t* r, int offset) {
+    assert(string_eq(&r->header_name, &STRING("content_length")));
+    header_handle_generic(r, offset);
+    //sring_t* name = &r->header_name;
+    string_t* val = &r->header_value;
+
     int len = atoi(val->data);
     if (len < 0) {
-        return response_build_err(response, request, 400);
+        return response_build_err(r, 400);
     }
-    if (request->method == M_GET || request->method == M_HEAD) {
-        //request->discard_body = 1;
-    }
-    request->content_length = len;
+    r->content_length = len;
     return OK;
 }
 
-// If both the uri in the request contains host[:port]
+// If both the uri in the r contains host[:port]
 // and has this host header, the host header is active.
-static int header_handle_host(
-        request_t* request, int offset, response_t* response)
-{
-    header_handle_generic(request, offset, response);
-
+static int header_handle_host(request_t* r, int offset) {
+    header_handle_generic(r, offset);
+    //memcpy(r->headers.host.data, "localhost:3030", 14);
     return OK;
 }
 
-static int header_handle_if_modified_since(
-        request_t* request, int offset, response_t* response)
-{
-    header_handle_generic(request, offset, response);
-
+static int header_handle_if_modified_since(request_t* r, int offset) {
+    header_handle_generic(r, offset);
     return OK;
 }
 
-
-static int request_handle_body(request_t* request, response_t* response)
-{
+static int request_handle_body(request_t* r) {
     int err = OK;
-    switch (request->t_encoding) {
+    switch (r->t_encoding) {
     case TE_IDENTITY:
-        err = parse_request_body_identity(request);
+        err = parse_request_body_identity(r);
         break;
     case TE_CHUNKED:
-        err = parse_request_body_chunked(request);
+        assert(false);
+        err = parse_request_body_chunked(r);
         break;
     default:
         // TODO(wgtdkp): cannot understanding
         // May discard the body
-        ;
+        assert(false);
     }
-       
+    
+    buffer_t* b = &r->rb;
     switch (err) {
     case AGAIN:
+        connection_disable_in(r->c);
+        b->begin = b->data;
+        connection_enable_out(r->uc);
         return AGAIN;
     case OK:
-        break;
+        // Do not allow pipelining
+        connection_disable_in(r->c);
+        if (!r->pass) {
+            response_build(r);
+            buffer_clear(b);
+            connection_enable_out(r->c);            
+        } else {
+            b->begin = b->data;
+            connection_enable_out(r->uc);
+        }
+        r->body_done = true;
+        r->in_handler = request_handle_request_line;
+        return OK;
     default:
-        return response_build_err(response, request, 400);
+        return response_build_err(r, 400);
     }
-
-    // Parse body done
-    request->stage = RS_REQUEST_LINE;
-
     return OK;
 }
 
-static int header_handle_accept(
-        request_t* request, int offset, response_t* response)
-{
-    header_handle_generic(request, offset, response);
-    
-    //parse_header_accept(request);
+static int header_handle_accept(request_t* r, int offset) {
+    header_handle_generic(r, offset);
+    //parse_header_accept(r);
     return OK;
 }
 
-static int header_handle_generic(
-        request_t* request, int offset, response_t* response)
-{
-    string_t* member = (string_t*)((char*)&request->headers + offset);
-    *member = request->header_value;
+static int header_handle_generic(request_t* r, int offset) {
+    string_t* member = (string_t*)((char*)&r->headers + offset);
+    *member = r->header_value;
     return OK;
 }
 
-int request_process_headers(request_t* request, response_t* response)
-{
-    request_headers_t* headers = &request->headers;
+/*
+int request_process_headers(request_t* r) {
+    request_headers_t* headers = &r->headers;
 
     // RFC 2616 [14.23] Host
     // https://www.w3.org/Protocols/rfc2616/rfc2616-sec8.html
     if (headers->host.data) {
-        parse_header_host(request);
+        parse_header_host(r);
     }
     
     // HTTP/1.1 must has the 'Host'' header
-    if ((request->version.minor == 1 && headers->host.data == NULL)
-        || request->host.data == NULL) {
-        return response_build_err(response, request, 400);
+    if ((r->version.minor == 1 && headers->host.data == NULL)
+        || r->host.data == NULL) {
+        return response_build_err(r, 400);
     }
     
     if (headers->cache_control.data) {
@@ -480,11 +540,11 @@ int request_process_headers(request_t* request, response_t* response)
                 sizeof("100-continue") - 1)) {
             // Have not received entity data
             // And we need the entity
-            if (buffer_size(&request->buffer) == 0
-                    && !request->discard_body) {
+            if (buffer_size(&r->buffer) == 0
+                    && !r->discard_body) {
                 response->status = 100;
             } else {
-                return response_build_err(response, request, 417);
+                return response_build_err(r, 417);
             }
         }
     }
@@ -518,7 +578,7 @@ int request_process_headers(request_t* request, response_t* response)
             if (tm_sec <= response->resource_stat.st_mtime) {
                 // RFC 2616 [14.28]
                 if (response->status / 100 == 2) {
-                    return response_build_err(response, request, 417);
+                    return response_build_err(response, r, 417);
                 }
             }
         }
@@ -533,7 +593,7 @@ int request_process_headers(request_t* request, response_t* response)
     //if (headers->referer.data) {
     //    
     //}
-    
 
     return OK;
 }
+*/

@@ -1,35 +1,32 @@
 #include "server.h"
 
 int root_fd;
-int app_fd;
 static pid_t worker_pid;
 static clock_t total = 0;
 static int total_reqs = 0;
-static int max_connection = 0;
-static int max_response = 0;
+//static int max_connection = 0;
+//static int max_response = 0;
 
 static int startup(unsigned short port);
 static int server_init(char* cfg_file);
 static void usage(void);
 
-static void sig_int(int signo)
-{
+static void sig_int(int signo) {
     float total_time = 1.0f * total / CLOCKS_PER_SEC;
     printf("[%d]: time: %f, total reqs: %d, RPS: %f\n",
             getpid(), total_time, total_reqs, total_reqs / total_time);
     printf("connection pool allocated: %d\n", connection_pool.nallocated);
-    printf("max connection allocated: %d\n", max_connection);
-    printf("response pool allocated: %d\n", response_pool.nallocated);
-    printf("max response allocated: %d\n", max_response);
+    //printf("max c allocated: %d\n", max_connection);
+    printf("resquest pool allocated: %d\n", request_pool.nallocated);
+    //printf("max response allocated: %d\n", max_response);
     fflush(stdout);
     if (worker_pid != getpid())
         kill(worker_pid, SIGKILL);
     exit(0);
 }
 
-static int startup(uint16_t port)
-{
-    // If the client closed the connection, then it will cause SIGPIPE
+static int startup(uint16_t port) {
+    // If the client closed the c, then it will cause SIGPIPE
     // Here simplely ignore this SIG
     signal(SIGPIPE, SIG_IGN);
     signal(SIGINT, sig_int);
@@ -64,8 +61,7 @@ static int startup(uint16_t port)
     return listen_fd;
 }
 
-static int server_init(char* cfg_file)
-{
+static int server_init(char* cfg_file) {
     // Set limits
     struct rlimit nofile_limit = {65535, 65535};
     setrlimit(RLIMIT_NOFILE, &nofile_limit);
@@ -78,9 +74,8 @@ static int server_init(char* cfg_file)
     header_map_init();
     mime_map_init();
     
-    pool_init(&back_connection_pool, sizeof(back_connection_t), 8, 0);
     pool_init(&connection_pool, sizeof(connection_t), 8, 0);
-    pool_init(&response_pool, QUEUE_WIDTH(response_t), 8, 0);
+    pool_init(&request_pool, sizeof(request_t), 8, 0);
     //pool_init(&accept_pool, LIST_WIDTH(accept_type_t), 4, 0);
     
     
@@ -93,34 +88,25 @@ static int server_init(char* cfg_file)
     return OK;
 }
 
-static void accept_connection(int listen_fd)
-{
+static void accept_connection(int listen_fd) {
     while (true) {
-        int connection_fd = accept(listen_fd, NULL, NULL);
-        if (connection_fd == ERROR) {
+        int c_fd = accept(listen_fd, NULL, NULL);
+        if (c_fd == ERROR) {
             // TODO(wgtdkp): handle this error
             // There could be too many connections(beyond OPEN_MAX)
             ERR_ON((errno != EWOULDBLOCK), "accept");
             break;
         }
-        connection_t* connection =
-                open_connection(connection_fd, &connection_pool);
-        if (connection == NULL) {
-            close(connection_fd);
-            ju_error("too many concurrent connection");
-        }
-        max_connection = max(max_connection, connection_pool.nallocated);
+        open_connection(c_fd);
     }
 }
 
-static void usage(void)
-{
+static void usage(void) {
     fprintf(stderr, "Usage:\n"
                     "    julia config_file\n");
 }
 
-int main(int argc, char* argv[])
-{
+int main(int argc, char* argv[]) {
     if (argc < 2) {
         usage();
         exit(ERROR);
@@ -180,7 +166,7 @@ work:
 
     assert(add_listener(&listen_fd) != ERROR);
     while (true) {
-        int nfds = epoll_wait(epoll_fd, events, MAX_EVENT_NUM, 3000);
+        int nfds = epoll_wait(epoll_fd, events, MAX_EVENT_NUM, 30);
         if (nfds == ERROR) {
             EXIT_ON(errno != EINTR, "epoll_wait");
         }
@@ -190,28 +176,31 @@ work:
         for (int i = 0; i < nfds; ++i) {
             int fd = *((int*)(events[i].data.ptr));
             if (fd == listen_fd) {
-                // We could accept more than one connection per request
+                // We could accept more than one c per request
                 accept_connection(listen_fd);
                 continue;
             }
             if (events[i].events & EPOLLIN) {
                 // Receive request or data
                 ++total_reqs;
-                max_response = max(max_response, response_pool.nallocated);
-                back_connection_t* back_connection = events[i].data.ptr;
-                // The event we register to epoll is a EPOLLIN of backend connection
-                if (back_connection->side == C_SIDE_BACK) {
-                    uwsgi_fetch_response(back_connection->response);
+                //max_response = max(max_response, response_pool.nallocated);
+                connection_t* c = events[i].data.ptr;
+                // The event we register to epoll is a EPOLLIN of backend c
+                if (c->side == C_SIDE_BACK) {
+                    handle_upstream(c);
                 } else {
-                    connection_t* connection = events[i].data.ptr;
-                    handle_request(connection);
+                    handle_request(c);
                 }
             }
             // TODO(wgtdkp): checking errors?
             if (events[i].events & EPOLLOUT) {
                 // Send response
-                connection_t* connection = events[i].data.ptr;
-                handle_response(connection);
+                connection_t* c = events[i].data.ptr;
+                if (c->side == C_SIDE_BACK) {
+                    handle_pass(c);
+                } else {
+                    handle_response(c);
+                }
             }
         }
         total += clock() - begin;

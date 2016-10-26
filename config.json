@@ -12,11 +12,8 @@
      * be specified before "/".
      */
     "locations": [
-        ["/img/", {
-            "index": ["index.html"]
-        }],
         ["/static/", {
-            // Currenly, not supported
+            // Not supported yet
             "index": ["index.html", "index.htm"] 
         }],
         ["/", {

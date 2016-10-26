@@ -3,46 +3,48 @@
 int epoll_fd;
 julia_epoll_event_t events[MAX_EVENT_NUM];
 pool_t connection_pool;
-pool_t back_connection_pool;
-pool_t response_pool;
+pool_t request_pool;
 pool_t accept_pool;
 
-int set_nonblocking(int fd);
+connection_t* open_connection(int fd) {
+    connection_t* c = pool_alloc(&connection_pool);
 
-connection_t* open_connection(int fd, pool_t* pool)
-{
-    connection_t* connection = pool_alloc(pool);
-    if (connection == NULL)
+    c->fd = fd;
+    c->side = C_SIDE_FRONT;
+    
+    set_nonblocking(c->fd);
+    c->event.events = EVENTS_IN;
+    c->event.data.ptr = c;
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, c->fd, &c->event) == -1) {
+        close_connection(c);
         return NULL;
-
-    connection->pool = pool;
-    connection->fd = fd;
-    connection->side = C_SIDE_FRONT;
-    set_nonblocking(connection->fd);
-    connection->event.events = EVENTS_IN;
-    connection->event.data.ptr = connection;
-    assert(epoll_ctl(epoll_fd, EPOLL_CTL_ADD,
-            connection->fd, &connection->event) != -1);
+    }
+    //bzero(&c->event, sizeof(c->event));
+    //c->event.data.ptr = c;
+    //connection_enable_in(c);    
     
-    request_init(&connection->request);
-    connection->nrequests = 0;
-
-    queue_init(&connection->response_queue, &response_pool);   
-    
-    return connection;
+    c->r = pool_alloc(&request_pool);
+    request_init(c->r, c);
+    //c->nrequests = 0;
+    return c;
 }
 
-void close_connection(connection_t* connection)
-{
+void close_connection(connection_t* c) {
     // The events automatically removed
-    close(connection->fd);
-    // The order cannot be reversed
-    queue_clear(&connection->response_queue);
-    pool_free(connection->pool, connection);
+    close(c->fd);
+    if (c->side == C_SIDE_FRONT) {
+        if (c->r->uc) {
+            close_connection(c->r->uc);
+            c->r->uc = NULL;
+        }
+        pool_free(&request_pool, c->r);
+    } else {
+        c->r->uc = NULL;
+    }
+    pool_free(&connection_pool, c);
 }
 
-int add_listener(int* listen_fd)
-{
+int add_listener(int* listen_fd) {
     julia_epoll_event_t ev;
     set_nonblocking(*listen_fd);
     ev.events = EVENTS_IN;
@@ -50,8 +52,7 @@ int add_listener(int* listen_fd)
     return epoll_ctl(epoll_fd, EPOLL_CTL_ADD, *listen_fd, &ev);
 }
 
-int set_nonblocking(int fd)
-{
+int set_nonblocking(int fd) {
     int flag = fcntl(fd, F_GETFL, 0);
     EXIT_ON(flag == -1, "fcntl: F_GETFL");
     flag |= O_NONBLOCK;

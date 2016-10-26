@@ -1,26 +1,6 @@
 #include "server.h"
 
-static int uwsgi_start_request(int fd, connection_t* connection);
-
-/*
- * Takeover request from server
- */
-int uwsgi_takeover(connection_t* connection)
-{
-    request_t* request = &connection->request;
-    response_t* response = request->response;
-    if (request->pass) {
-        int err = uwsgi_start_request(response->resource_fd, connection);
-        // Ok or Error, the request will be sent only
-        request->pass = false;
-        if (err != OK)
-            return err;
-    }
-    return OK;
-}
-
-static int uwsgi_buffer_append_kv(buffer_t* buffer, string_t* k, string_t* v)
-{
+static int uwsgi_buffer_append_kv(buffer_t* buffer, string_t* k, string_t* v) {
     int len = buffer_append_u16le(buffer, k->len);
     len += buffer_append_string(buffer, k);
     len += buffer_append_u16le(buffer, v->len);
@@ -36,9 +16,10 @@ static int uwsgi_buffer_append_kv(buffer_t* buffer, string_t* k, string_t* v)
  *  OK: done send request to uwsgi
  *  others: errors
  */
-static int uwsgi_start_request(int fd, connection_t* connection)
-{
-    request_t* request = &connection->request;
+int uwsgi_start_request(connection_t* c) {
+    return ERROR;
+    /*
+    request_t* request = &c->request;
     response_t* response = request->response;
     assert(request->pass);
     uri_t* uri = &request->uri;
@@ -48,6 +29,7 @@ static int uwsgi_start_request(int fd, connection_t* connection)
     script_name = STRING("");
     path_info = uri->abs_path;
 
+    int err;
     buffer_t buf;
     buffer_init(&buf);
     buffer_append_u32le(&buf, 0);
@@ -57,104 +39,130 @@ static int uwsgi_start_request(int fd, connection_t* connection)
     } else if (request->method == M_POST) {
         uwsgi_buffer_append_kv(&buf, &STRING("REQUEST_METHOD"), &STRING("POST"));
     } else {
-        return response_build_err(response, request, 405);
+        // TODO(wgtdkp): support more method
+        err = response_build_err(response, request, 405);
+        goto error;
     }
     uwsgi_buffer_append_kv(&buf, &STRING("SCRIPT_NAME"), &script_name);
     uwsgi_buffer_append_kv(&buf, &STRING("PATH_INFO"), &path_info);
     uwsgi_buffer_append_kv(&buf, &STRING("QUERY_STRING"), &uri->query);
     uwsgi_buffer_append_kv(&buf, &STRING("CONTENT_TYPE"), &headers->content_type);
     uwsgi_buffer_append_kv(&buf, &STRING("CONTENT_LENGTH"), &headers->content_length);
-    uwsgi_buffer_append_kv(&buf, &STRING("HTTP_HOST"), &headers->host);
-    if (headers->cookie.len)
-        uwsgi_buffer_append_kv(&buf, &STRING("HTTP_COOKIE"), &headers->cookie);
     uwsgi_buffer_append_kv(&buf, &STRING("SERVER_NAME"), &uri->host);
     uwsgi_buffer_append_kv(&buf, &STRING("SERVER_PORT"), &uri->port);
     uwsgi_buffer_append_kv(&buf, &STRING("SERVER_PROTOCOL"), &STRING("HTTP/1.1"));
-
+    
+    // TODO(wgtdkp): more headers
+    uwsgi_buffer_append_kv(&buf, &STRING("HTTP_HOST"), &headers->host);
+    if (headers->cookie.len)
+        uwsgi_buffer_append_kv(&buf, &STRING("HTTP_COOKIE"), &headers->cookie);
+    
     char* p = buf.begin + 1;
     uint16_t data_size = buffer_size(&buf) - 4;
     *p++ = data_size & 0xff;
     *p++ = (data_size >> 8) & 0xff;
-    
+
     // Blocking send
     // As the request from the client is buffered by julia,
     // blocking send should be fine.
     // So the return value could only be OK or ERROR
-    print_buffer(&buf);
-    if (buffer_send(&buf, fd) != OK) {
-        return response_build_err(response, request, 404);
+    //print_buffer(&buf);
+    if (buffer_send(&buf, response->resource_fd) != OK) {
+        err = response_build_err(response, request, 404);
+        goto error;
     }
-    // Send the body
-    if (buffer_size(&request->buffer) != request->body_received) {
-        print_buffer(&request->buffer);
-        printf("size: %d, received: %d\n", buffer_size(&request->buffer), request->body_received);
-        printf("content-length: %d\n", request->content_length);
-        fflush(stdout);
-        assert(false);
+
+    response->body_len = request->content_length;
+    // Try send body
+    if (buffer_size(&request->buffer) >= response->body_len) {
+        // The whole body received
+        request->body_received = response->body_len;
+        request->stage = RS_REQUEST_LINE;
+        if (buffer_send(&request->buffer, response->resource_fd) != OK) {
+            err = response_build_err(response, request, 404);
+            goto error;
+        }
+    } else {
+        assert(response->body_fd == -1);
+        // Received body is too long, we need to put it into a tmpfile
+        if ((response->body_fd = open("./", O_RDWR | O_TMPFILE, 0x777)) == -1) {
+            // TODO(wgtdkp): handle the error
+            perror("open");
+            assert(false);
+        }
+        // Significant overhead！
+        // It's better to choose BUF_SIZE as the page size of the system 
+        request->body_received += buffer_size(&request->buffer);
+        write(response->body_fd, request->buffer.begin, buffer_size(&request->buffer));
+        request->buffer.end = request->buffer.begin;
     }
-    print_buffer(&request->buffer);
-    if (buffer_send(&request->buffer, fd) != OK) {
-        return response_build_err(response, request, 404);
-    }
-    
-    set_nonblocking(fd);
+        
+
+
+    set_nonblocking(response->resource_fd);
     back_connection_t* back_connection = pool_alloc(&back_connection_pool);
-    back_connection->fd = fd;
+    back_connection->fd = response->resource_fd;
     back_connection->side = C_SIDE_BACK;
     back_connection->response = response;
     julia_epoll_event_t event = {
         .events = EVENTS_IN,
         .data.ptr = back_connection
     };
+    // Send body file the event driven way
+    if (response->body_fd != -1) {
+        event.events |= EVENTS_OUT;
+    }
+
     // Register event in
-    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &event) == -1) {
-        return response_build_err(response, request, 404);
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, response->resource_fd, &event) == -1) {
+        err = response_build_err(response, request, 404);
+        goto error;
     }
+    return OK;
+error:
+    if (response->body_fd != -1) {
+        close(response->body_fd);
+        response->body_fd = -1;
+    }
+    close(response->resource_fd);
+    response->resource_fd = -1;
+    response->fetch_from_back = false;
+    return err;
+    */
+}
+
+int uwsgi_abort_request() {
     return OK;
 }
 
-int uwsgi_abort_request()
-{
-    return OK;
-}
-
-int uwsgi_fetch_response(response_t* response)
-{
-    assert(response->fetch_from_back);
-    if (response->resource_fd == -1)
-        return OK; // Have already fetched all data
-    buffer_t* buffer = &response->buffer;
-    // If use epoll level trigger, data may be lost here
-    int err = buffer_recv(buffer, response->resource_fd);
-    print_buffer(buffer);    
-    if (err != AGAIN) { // We done fetch the whole response from backend
-        // The connection to backend have already been closed by uwsgi server
-        close(response->resource_fd); // The registered events auto removed
-        response->resource_fd = -1;
-        pool_free(&back_connection_pool, response->back_connection);
-        response->back_connection = NULL;
-        return OK;
-    }
-    return AGAIN; // There are still data from uwsgi
-}
-
-int uwsgi_open_connection(location_t* loc)
-{
+int uwsgi_open_connection(request_t* r, location_t* loc) {
     assert(loc->pass);
 
     int fd = socket(AF_INET, SOCK_STREAM, 0);
-    EXIT_ON(fd == -1, "socket");
+    ERR_ON(fd == -1, "socket");
 
     struct sockaddr_in addr;
     bzero(&addr, sizeof(addr));
     addr.sin_family = AF_INET;
     addr.sin_port = htons(loc->port);
     int success = inet_pton(AF_INET, loc->host.data, &addr.sin_addr);
-    if (success <= 0)
-        return ERROR;
+    if (success <= 0) return -1;
     
     int err = connect(fd, (struct sockaddr*)&addr, sizeof(addr));
-    if (err < 0)
-        return ERROR;
+    if (err < 0) return -1;
+
+    r->uc = pool_alloc(&connection_pool);
+    r->uc->fd = fd;
+    r->uc->side = C_SIDE_BACK;
+
+    set_nonblocking(r->uc->fd);
+    r->uc->event.events = EVENTS_OUT;
+    r->uc->event.data.ptr = r->uc;
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, r->uc->fd, &r->uc->event) == -1) {
+        close_connection(r->uc);
+        return -1;
+    }
+    r->uc->r = r;
+
     return fd;
 }

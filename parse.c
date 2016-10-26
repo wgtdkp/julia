@@ -20,18 +20,16 @@
 static vector_t header_values;
 static vector_t header_value_params;
 
-static int parse_uri(uri_t* request, char* p);
+static int parse_uri(uri_t* r, char* p);
 static int parse_method(char* begin, char* end);
 static void split_header_value(string_t* val, char split, vector_t* vec);
 
-void parse_init(void)
-{
+void parse_init(void) {
     vector_init(&header_values, sizeof(string_t), 0);
     vector_init(&header_value_params, sizeof(string_t), 0);
 }
 
-static inline int parse_method(char* begin, char* end)
-{
+static inline int parse_method(char* begin, char* end) {
     // End of method
     int len = end - begin;
     switch (len) {
@@ -77,20 +75,19 @@ static inline int parse_method(char* begin, char* end)
     return ERR_INVALID_METHOD;   
 }
 
-int parse_request_line(request_t* request)
-{
-    buffer_t* buffer = &request->buffer;
+int parse_request_line(request_t* r) {
+    buffer_t* b = &r->rb;
     int uri_err;
     char* p;
-    for (p = buffer->begin; p < buffer->end; ++p) {
+    for (p = b->begin; p < b->end; ++p) {
         char ch = *p;
         
-        switch (request->state) {
+        switch (r->state) {
         case RL_S_BEGIN:
             switch (ch) {
             case 'A' ... 'Z':
-                request->request_line.data = p;
-                request->state = RL_S_METHOD;
+                r->request_line.data = p;
+                r->state = RL_S_METHOD;
                 break;
             default:
                 return ERR_INVALID_REQUEST;
@@ -102,10 +99,10 @@ int parse_request_line(request_t* request)
             case 'A' ... 'Z':
                 break;
             case ' ':
-                request->method = parse_method(request->request_line.data, p);
-                if (request->method == ERR_INVALID_METHOD)
-                    return request->method;
-                request->state = RL_S_SP_BEFORE_URI;
+                r->method = parse_method(r->request_line.data, p);
+                if (r->method == ERR_INVALID_METHOD)
+                    return r->method;
+                r->state = RL_S_SP_BEFORE_URI;
                 break;
             }
             break;
@@ -119,10 +116,10 @@ int parse_request_line(request_t* request)
             case ' ':
                 break;
             default:
-                request->uri.state = URI_S_BEGIN;
-                if ((uri_err = parse_uri(&request->uri, p)) != OK)
+                r->uri.state = URI_S_BEGIN;
+                if ((uri_err = parse_uri(&r->uri, p)) != OK)
                     return uri_err;
-                request->state = RL_S_URI;
+                r->state = RL_S_URI;
                 break;
             }
             break;
@@ -134,14 +131,14 @@ int parse_request_line(request_t* request)
             case '\n':
                 return ERR_INVALID_REQUEST;
             case ' ':
-                request->state = RL_S_SP_BEFROE_VERSION;
+                r->state = RL_S_SP_BEFROE_VERSION;
                 // Fall through
             default: 
-                if ((uri_err = parse_uri(&request->uri, p)) != OK)
+                if ((uri_err = parse_uri(&r->uri, p)) != OK)
                     return uri_err;
                 if (ch == ' ') {
-                    if (request->uri.nentries < request->uri.nddots) {
-                        request->uri.abs_path.len = 1;        
+                    if (r->uri.nentries < r->uri.nddots) {
+                        r->uri.abs_path.len = 1;        
                     }
                 }
                 break;
@@ -153,7 +150,7 @@ int parse_request_line(request_t* request)
             case ' ':
                 break;
             case 'H':
-                request->state = RL_S_HTTP_H;
+                r->state = RL_S_HTTP_H;
                 break;
             default:
                 return ERR_INVALID_REQUEST;
@@ -163,30 +160,30 @@ int parse_request_line(request_t* request)
         // Is "HTTP/major.minor" case-sensitive?
         case RL_S_HTTP_H:
             PARSE_ERR_ON(ch != 'T', ERR_INVALID_REQUEST);
-            request->state = RL_S_HTTP_HT;
+            r->state = RL_S_HTTP_HT;
             break;
 
         case RL_S_HTTP_HT:
             PARSE_ERR_ON(ch != 'T', ERR_INVALID_REQUEST);
-            request->state = RL_S_HTTP_HTT;
+            r->state = RL_S_HTTP_HTT;
             break;
 
         case RL_S_HTTP_HTT:
             PARSE_ERR_ON(ch != 'P', ERR_INVALID_REQUEST);
-            request->state = RL_S_HTTP_HTTP;
+            r->state = RL_S_HTTP_HTTP;
             break;
 
         case RL_S_HTTP_HTTP:
             PARSE_ERR_ON(ch != '/', ERR_INVALID_REQUEST);
-            request->state = RL_S_HTTP_VERSION_SLASH;
+            r->state = RL_S_HTTP_VERSION_SLASH;
             break;
 
         case RL_S_HTTP_VERSION_SLASH:
             switch (ch) {
             case '0' ... '9':
-                request->version.major =
-                        request->version.major * 10 + ch - '0';
-                request->state = RL_S_HTTP_VERSION_MAJOR;
+                r->version.major =
+                        r->version.major * 10 + ch - '0';
+                r->state = RL_S_HTTP_VERSION_MAJOR;
                 break;
             default:
                 return ERR_INVALID_REQUEST;
@@ -196,12 +193,12 @@ int parse_request_line(request_t* request)
         case RL_S_HTTP_VERSION_MAJOR:
             switch (ch) {
             case '0' ... '9':
-                request->version.major =
-                        request->version.major * 10 + ch - '0';
-                PARSE_ERR_ON(request->version.major > 999, ERR_INVALID_VERSION);
+                r->version.major =
+                        r->version.major * 10 + ch - '0';
+                PARSE_ERR_ON(r->version.major > 999, ERR_INVALID_VERSION);
                 break;
             case '.':
-                request->state = RL_S_HTTP_VERSION_DOT;
+                r->state = RL_S_HTTP_VERSION_DOT;
                 break;
             default:
                 return ERR_INVALID_REQUEST;
@@ -211,9 +208,9 @@ int parse_request_line(request_t* request)
         case RL_S_HTTP_VERSION_DOT:
             switch (ch) {
             case '0' ... '9':
-                request->version.minor =
-                        request->version.minor * 10 + ch - '0';
-                request->state = RL_S_HTTP_VERSION_MINOR;
+                r->version.minor =
+                        r->version.minor * 10 + ch - '0';
+                r->state = RL_S_HTTP_VERSION_MINOR;
                 break;
             default:
                 return ERR_INVALID_REQUEST;
@@ -223,15 +220,15 @@ int parse_request_line(request_t* request)
         case RL_S_HTTP_VERSION_MINOR:
             switch (ch) {
             case '0' ... '9':
-                request->version.minor =
-                        request->version.minor * 10 + ch - '0';
-                PARSE_ERR_ON(request->version.minor > 999, ERR_INVALID_VERSION);
+                r->version.minor =
+                        r->version.minor * 10 + ch - '0';
+                PARSE_ERR_ON(r->version.minor > 999, ERR_INVALID_VERSION);
                 break;
             case ' ':
-                request->state = RL_S_SP_AFTER_VERSION;
+                r->state = RL_S_SP_AFTER_VERSION;
                 break;
             case '\r':
-                request->state = RL_S_ALMOST_DONE;
+                r->state = RL_S_ALMOST_DONE;
                 break;
             case '\n':
                 goto done;
@@ -245,7 +242,7 @@ int parse_request_line(request_t* request)
             case ' ':
                 break;
             case '\r':
-                request->state = RL_S_ALMOST_DONE;
+                r->state = RL_S_ALMOST_DONE;
                 break;
             case '\n':
             default:
@@ -262,21 +259,20 @@ int parse_request_line(request_t* request)
         }
     }
 
-    buffer->begin = buffer->end;
+    b->begin = b->end;
     return AGAIN;
 
 done:
-    buffer->begin = p + 1;
-    request->request_line.len = p - request->request_line.data;
-    request->state = HL_S_BEGIN;
+    b->begin = p + 1;
+    r->request_line.len = p - r->request_line.data;
+    r->state = HL_S_BEGIN;
     return OK;
 }
 
 /*
  * Request-URI = [scheme ":" "//" host[":" port]][abs_path["?" query]]
  */
-static int parse_uri(uri_t* uri, char* p)
-{ 
+static int parse_uri(uri_t* uri, char* p) {
     char ch = *p;
     switch (uri->state) {
     case URI_S_BEGIN:
@@ -601,39 +597,38 @@ static int parse_uri(uri_t* uri, char* p)
     return OK;
 }
 
-int parse_header_line(request_t* request)
-{
-    buffer_t* buffer = &request->buffer;
+int parse_header_line(request_t* r) {
+    buffer_t* b = &r->rb;
     char* p;
-    for (p = buffer->begin; p < buffer->end; ++p) {
+    for (p = b->begin; p < b->end; ++p) {
         char ch = *p;
-        switch (request->state) {
+        switch (r->state) {
         case HL_S_BEGIN:
             // Reset states
-            string_init(&request->header_name);
-            string_init(&request->header_value);
+            string_init(&r->header_name);
+            string_init(&r->header_value);
             switch(ch) {
             case 'A' ... 'Z':
                 *p = *p - 'A' + 'a';
                 ch = *p;
-                request->header_name.data = p;
-                request->state = HL_S_NAME;
+                r->header_name.data = p;
+                r->state = HL_S_NAME;
                 break;
             case '-':
                 *p = *p - '-' + '_';
                 ch = *p;
             case '0' ... '9':
             case 'a' ... 'z':
-                request->header_name.data = p;
-                request->state = HL_S_NAME;
+                r->header_name.data = p;
+                r->state = HL_S_NAME;
                 break;
             case '\r':
-                request->state = HL_S_ALMOST_DONE;
+                r->state = HL_S_ALMOST_DONE;
                 break;
             case '\n':
                 goto header_done;
             default:
-                request->state = HL_S_IGNORE;
+                r->state = HL_S_IGNORE;
                 break;
             }
             break;
@@ -641,7 +636,7 @@ int parse_header_line(request_t* request)
         case HL_S_IGNORE:
             switch (ch) {
             case '\n':
-                request->state = HL_S_BEGIN;
+                r->state = HL_S_BEGIN;
                 break;
             default:
                 break;
@@ -665,15 +660,15 @@ int parse_header_line(request_t* request)
 
                 break;
             case ':':
-                request->header_name.len = p - request->header_name.data;
-                request->state = HL_S_COLON;
+                r->header_name.len = p - r->header_name.data;
+                r->state = HL_S_COLON;
                 break;
             case '\r':
-                request->state = HL_S_ALMOST_DONE;
+                r->state = HL_S_ALMOST_DONE;
                 break;
             case '\n':
             default:
-                request->state = HL_S_IGNORE;
+                r->state = HL_S_IGNORE;
                 break;
             }
             break;
@@ -682,16 +677,16 @@ int parse_header_line(request_t* request)
         case HL_S_COLON:
             switch (ch) {
             case ' ':
-                request->state = HL_S_SP_BEFORE_VALUE;
+                r->state = HL_S_SP_BEFORE_VALUE;
                 break;
             case '\r':
-                request->state = HL_S_ALMOST_DONE;
+                r->state = HL_S_ALMOST_DONE;
                 break;
             case '\n':
                 goto header_done;
             default:
-                request->header_value.data = p;
-                request->state = HL_S_VALUE;
+                r->header_value.data = p;
+                r->state = HL_S_VALUE;
                 break;
             }
             break;
@@ -699,15 +694,15 @@ int parse_header_line(request_t* request)
         case HL_S_VALUE:
             switch (ch) {
             case ' ':
-                request->header_value.len = p - request->header_value.data;
-                request->state = HL_S_SP_AFTER_VALUE;
+                r->header_value.len = p - r->header_value.data;
+                r->state = HL_S_SP_AFTER_VALUE;
                 break;
             case '\r':
-                request->header_value.len = p - request->header_value.data;
-                request->state = HL_S_ALMOST_DONE;
+                r->header_value.len = p - r->header_value.data;
+                r->state = HL_S_ALMOST_DONE;
                 break;
             case '\n':
-                request->header_value.len = p - request->header_value.data;
+                r->header_value.len = p - r->header_value.data;
                 goto header_done;
             default:
                 break;
@@ -719,13 +714,13 @@ int parse_header_line(request_t* request)
             case ' ':
                 break;
             case '\r':
-                request->state = HL_S_ALMOST_DONE;
+                r->state = HL_S_ALMOST_DONE;
                 break;
             case '\n':
                 // Single '\n' is also accepted
                 goto header_done;
             default:
-                request->state = HL_S_VALUE;
+                r->state = HL_S_VALUE;
                 break;
             }
             break;
@@ -735,7 +730,7 @@ int parse_header_line(request_t* request)
             case '\n':
                 goto header_done;
             default:
-                request->state = HL_S_IGNORE;
+                r->state = HL_S_IGNORE;
                 break;
             }
             break;
@@ -745,19 +740,18 @@ int parse_header_line(request_t* request)
         }
     }
     
-    buffer->begin = buffer->end;
+    b->begin = b->end;
     return AGAIN;
 
 header_done:
-    buffer->begin = p + 1;
-    request->state = HL_S_BEGIN;
+    b->begin = p + 1;
+    r->state = HL_S_BEGIN;
     
-    return request->header_name.data == NULL ? EMPTY_LINE: OK;
+    return r->header_name.data == NULL ? EMPTY_LINE: OK;
 }
 
-void parse_header_host(request_t* request)
-{
-    string_t* host = &request->headers.host;
+void parse_header_host(request_t* r) {
+    string_t* host = &r->headers.host;
     char* semicolon = NULL;
     for (int i = 0; i < host->len; ++i) {
         if (host->data[i] == ':')
@@ -765,11 +759,11 @@ void parse_header_host(request_t* request)
     }
     
     if (semicolon == NULL) {
-        request->host = *host;
-        request->port = 80;
+        r->host = *host;
+        r->port = 80;
     } else {
-        request->host = (string_t){host->data, semicolon - host->data};
-        request->port = atoi(semicolon + 1);
+        r->host = (string_t){host->data, semicolon - host->data};
+        r->port = atoi(semicolon + 1);
     }
 }
 
@@ -777,8 +771,7 @@ void parse_header_host(request_t* request)
  * Split *( *LWS element *( *LWS "," *LWS element ))
  * LWS surround element were trimmed.
  */
-static void split_header_value(string_t* val, char split, vector_t* vec)
-{
+static void split_header_value(string_t* val, char split, vector_t* vec) {
     vector_resize(vec, 0); // Clear previous data
 
     string_t* cur = NULL;
@@ -805,10 +798,9 @@ static void split_header_value(string_t* val, char split, vector_t* vec)
         cur->len = end - cur->data;
 }
 
-int parse_header_accept(request_t* request)
-{
-    string_t* val = &request->header_value;
-    list_t* accept_list = &request->accepts;
+int parse_header_accept(request_t* r) {
+    string_t* val = &r->header_value;
+    list_t* accept_list = &r->accepts;
     
     split_header_value(val, ',', &header_values);
     for (int i = 0; i < header_values.size; ++i) {
@@ -853,13 +845,12 @@ int parse_header_accept(request_t* request)
     return OK;
 }
 
-int parse_request_body_chunked(request_t* request)
-{
+int parse_request_body_chunked(request_t* r) {
     assert(0);
-    buffer_t* buffer = &request->buffer;
-    for (char* p = buffer->begin; p < buffer->end; ++p) {
+    buffer_t* b = &r->rb;
+    for (char* p = b->begin; p < b->end; ++p) {
         //char ch = *p;
-        switch (request->state) {
+        switch (r->state) {
             
         }
     }
@@ -867,23 +858,15 @@ int parse_request_body_chunked(request_t* request)
     return OK;
 }
 
-int parse_request_body_identity(request_t* request)
-{
-    if (request->content_length <= 0)
+int parse_request_body_identity(request_t* r) {
+    buffer_t* b = &r->rb;    
+    if (r->content_length <= 0) {
         return OK;
+    }
 
-    buffer_t* buffer = &request->buffer;
-    request->body_received += buffer_size(buffer);
-    if (request->body_received >= request->content_length) {
-        // Received full Body
-        
-        //if (request->discard_body) {
-        //    // There may be data belongs to the next request
-        //    buffer->begin += request->body_received - request->content_length;
-        //    //request->body_done = 1;
-        //    //return OK;
-        //}
-        request->body_done = 1;
+    // Error here
+    r->body_received += buffer_size(b);
+    if (r->body_received >= r->content_length) {
         return OK;
     }
     

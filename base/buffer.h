@@ -4,6 +4,7 @@
 #include "string.h"
 #include "util.h"
 
+#include <assert.h>
 #include <memory.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -32,14 +33,6 @@ static inline void buffer_clear(buffer_t* buffer)
 static inline int buffer_size(buffer_t* buffer)
 {
     return buffer->end - buffer->begin;
-}
-
-static inline int buffer_append(buffer_t* buffer, const char* data, int len)
-{
-    int appended_len = min(buffer->limit - buffer->end, len);
-    memcpy(buffer->end, data, appended_len);
-    buffer->end += appended_len;
-    return appended_len;
 }
 
 static inline int buffer_append_u8(buffer_t* buffer, uint8_t val)
@@ -72,6 +65,24 @@ static inline void buffer_discard_parsed(buffer_t* buffer)
     memcpy(buffer->data, buffer->begin, size);
     buffer->begin = buffer->data;
     buffer->end = buffer->begin + size;
+}
+
+static inline bool buffer_full(buffer_t* buffer)
+{
+    return buffer->end >= buffer->limit;
+}
+
+static inline int buffer_margin(buffer_t* buffer)
+{
+    assert(buffer->limit - buffer->end >= 0);
+    return buffer->limit - buffer->end;
+}
+
+static inline void buffer_append(buffer_t* des, buffer_t* src)
+{
+    assert(buffer_margin(des) >= buffer_size(src));
+    memcpy(des->end, src->begin, buffer_size(src));
+    des->end += buffer_size(src);
 }
 
 int buffer_recv(buffer_t* buffer, int fd);

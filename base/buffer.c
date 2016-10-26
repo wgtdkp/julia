@@ -10,14 +10,17 @@
 #include <sys/socket.h>
 
 
-// Read data to buffer
-// Return: if haven't read eof, bytes read_n; 
-//         else, 0 - read_n;
+/*
+ * Return:
+ *  OK: received all data, fd closed by peer
+ *  AGAIN: the buffer has no enough space for incoming data
+ *  ERROR: error occurred
+ */
 int buffer_recv(buffer_t* buffer, int fd)
 {
-    assert(buffer->end < buffer->limit);
+    //assert(!buffer_full(buffer));
     //int read_n = 0;
-    while (buffer->end < buffer->limit) {
+    while (!buffer_full(buffer)) {
         int margin = buffer->limit - buffer->end;
         int len = recv(fd, buffer->end, margin, 0);
         if (len == 0) // EOF
@@ -34,6 +37,13 @@ int buffer_recv(buffer_t* buffer, int fd)
     return AGAIN;
 }
 
+
+/*
+ * Return:
+ *  OK: have sent all data in buffer
+ *  AGAIN: have not sent all data in buffer
+ *  ERROR: error occurred
+ */
 int buffer_send(buffer_t* buffer, int fd)
 {
     //int sent = 0;
@@ -41,7 +51,7 @@ int buffer_send(buffer_t* buffer, int fd)
         int len = send(fd, buffer->begin, buffer_size(buffer), 0);
         if (len == -1) {
             if (errno == EAGAIN)
-                break;
+                return AGAIN;
             else if (errno == EPIPE) {
                 // TODO(wgtdkp): the connection is broken
             }
@@ -51,11 +61,8 @@ int buffer_send(buffer_t* buffer, int fd)
         //sent += len;
         buffer->begin += len;
     };
-    if (buffer_size(buffer) == 0) {
-        buffer_clear(buffer);
-        return OK;
-    }
-    return AGAIN;
+    buffer_clear(buffer);
+    return OK;
 }
 
 int buffer_append_string(buffer_t* buffer, const string_t* str)
