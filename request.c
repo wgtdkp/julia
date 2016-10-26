@@ -239,7 +239,7 @@ int send_response_file(request_t* r) {
     return OK; // Make compiler happy
 }
 
-static int cnt = 0;
+//static int cnt = 0;
 int handle_response(connection_t* c) {
     request_t* r = c->r;
     int err;

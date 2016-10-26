@@ -345,7 +345,6 @@ static void response_put_date(request_t* r) {
 }
 
 int response_build_err(request_t* r, int err) {
-    int appended = 0;
     buffer_t* b = &r->sb;
     //buffer_t* buffer = &response->buffer;
     r->status = err;
@@ -368,13 +367,10 @@ int response_build_err(request_t* r, int err) {
                 page_len + page_tail_len);
     }
     
-    appended = buffer_append_cstring(b, CRLF);
-    
+    buffer_append_cstring(b, CRLF);
     if (page != NULL) {
-        
         buffer_append_string(b, &(string_t){page, page_len});
-        appended = buffer_append_string(b,
-                &(string_t){err_page_tail, page_tail_len});
+        buffer_append_string(b, &(string_t){err_page_tail, page_tail_len});
     }
     connection_disable_in(r->c);
     connection_enable_out(r->c);
