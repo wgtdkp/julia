@@ -3,7 +3,7 @@
 [lighttpd]: https://www.lighttpd.net/
 
 # julia
-A lightweight high performance http server
+A small yet high performance http server and reverse proxy
 
 ### ENVIRONMENT
 * gcc 5.4.0
