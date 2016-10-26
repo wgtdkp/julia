@@ -23,25 +23,21 @@ int vector_reserve(vector_t* vec, int c);
 int vector_resize(vector_t* vec, int new_size);
 void vector_clear(vector_t* vec);
 
-static inline void* vector_at(vector_t* vec, int i)
-{
+static inline void* vector_at(vector_t* vec, int i) {
     return (void*)((char*)vec->data + vec->width * i);
 }
 
-static inline void* vector_back(vector_t* vec)
-{
+static inline void* vector_back(vector_t* vec) {
     return vector_at(vec, vec->size - 1);
 }
 
-static inline void* vector_push(vector_t* vec)
-{
+static inline void* vector_push(vector_t* vec) {
     if (vector_resize(vec, vec->size + 1) != OK)
         return NULL;
     return vector_back(vec);
 }
 
-static inline void vector_pop(vector_t* vec)
-{
+static inline void vector_pop(vector_t* vec) {
     assert(vec->size > 0);
     --vec->size;
 }

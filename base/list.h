@@ -22,18 +22,15 @@ typedef struct {
 int list_insert(list_t* list, list_node_t* pos, list_node_t* new_node);
 int list_delete(list_t* list, list_node_t* x);
 
-static inline list_node_t* list_head(list_t* list)
-{
+static inline list_node_t* list_head(list_t* list) {
     return list->dummy.next;
 }
 
-static inline list_node_t* list_tail(list_t* list)
-{
+static inline list_node_t* list_tail(list_t* list) {
     return list->dummy.prev;
 }
 
-static inline int list_init(list_t* list, pool_t* pool)
-{
+static inline int list_init(list_t* list, pool_t* pool) {
     list->size = 0;
     list->dummy.next = NULL;            // The head
     list->dummy.prev = &list->dummy;    // The tail
@@ -41,20 +38,17 @@ static inline int list_init(list_t* list, pool_t* pool)
     return OK;
 }
 
-static inline void list_clear(list_t* list)
-{
+static inline void list_clear(list_t* list) {
     while (list_head(list) != NULL) {
         list_delete(list, list_head(list));
     }
 }
 
-static inline list_node_t* list_alloc(list_t* list)
-{
+static inline list_node_t* list_alloc(list_t* list) {
     return pool_alloc(list->pool);
 }
 
-static inline void list_free(list_t* list, list_node_t* x)
-{
+static inline void list_free(list_t* list, list_node_t* x) {
     pool_free(list->pool, x);
 }
 

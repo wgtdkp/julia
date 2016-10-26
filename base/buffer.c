@@ -16,8 +16,7 @@
  *  AGAIN: the buffer has no enough space for incoming data
  *  ERROR: error occurred
  */
-int buffer_recv(buffer_t* buffer, int fd)
-{
+int buffer_recv(buffer_t* buffer, int fd) {
     while (!buffer_full(buffer)) {
         int margin = buffer->limit - buffer->end;
         int len = recv(fd, buffer->end, margin, 0);
@@ -42,8 +41,7 @@ int buffer_recv(buffer_t* buffer, int fd)
  *  AGAIN: have not sent all data in buffer
  *  ERROR: error occurred
  */
-int buffer_send(buffer_t* buffer, int fd)
-{
+int buffer_send(buffer_t* buffer, int fd) {
     //int sent = 0;
     while (buffer_size(buffer) > 0) {
         int len = send(fd, buffer->begin, buffer_size(buffer), 0);
@@ -63,8 +61,7 @@ int buffer_send(buffer_t* buffer, int fd)
     return OK;
 }
 
-int buffer_append_string(buffer_t* buffer, const string_t* str)
-{
+int buffer_append_string(buffer_t* buffer, const string_t* str) {
     int margin = buffer->limit - buffer->end;
     assert(margin > 0);
     int appended = min(margin, str->len);
@@ -73,8 +70,7 @@ int buffer_append_string(buffer_t* buffer, const string_t* str)
     return appended;
 }
 
-int buffer_print(buffer_t* buffer, const char* format, ...)
-{
+int buffer_print(buffer_t* buffer, const char* format, ...) {
     va_list args;
     va_start (args, format);
     int margin = buffer->limit - buffer->end;
@@ -85,8 +81,7 @@ int buffer_print(buffer_t* buffer, const char* format, ...)
     return len;
 }
 
-void print_buffer(buffer_t* buffer)
-{
+void print_buffer(buffer_t* buffer) {
     for(char* p = buffer->begin; p != buffer->end; ++p) {
         printf("%c", *p);
         fflush(stdout);

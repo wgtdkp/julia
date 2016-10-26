@@ -7,8 +7,7 @@
 #include <assert.h>
 
 // '%*s' <- string_t*
-int print_string(const char* format, ...)
-{
+int print_string(const char* format, ...) {
     int ret = 0;
     va_list args;
     va_start(args, format);
@@ -27,8 +26,7 @@ int print_string(const char* format, ...)
     return ret;
 }
 
-int string_cmp(const string_t* lhs, const string_t* rhs)
-{
+int string_cmp(const string_t* lhs, const string_t* rhs) {
     if (lhs->data == rhs->data && lhs->len == rhs->len)
         return 0;
     if (lhs->data == NULL)
@@ -49,8 +47,7 @@ int string_cmp(const string_t* lhs, const string_t* rhs)
     return (i == lhs->len) ? -1: 1;
 }
 
-bool string_eq(const string_t* lhs, const string_t* rhs)
-{
+bool string_eq(const string_t* lhs, const string_t* rhs) {
     if (lhs->data == NULL && rhs->data == NULL)
         return true;
     if (lhs->data == NULL || rhs->data == NULL)

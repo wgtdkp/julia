@@ -3,8 +3,7 @@
 #include <assert.h>
 #include <stdint.h>
 
-int chunk_init(chunk_t* chunk, int width, int size)
-{
+int chunk_init(chunk_t* chunk, int width, int size) {
     assert(width != 0 && size != 0);
     chunk->data = malloc(width * size);
     if (chunk->data == NULL)
@@ -20,14 +19,12 @@ int chunk_init(chunk_t* chunk, int width, int size)
     return OK;
 }
 
-static inline void chunk_clear(chunk_t* chunk)
-{
+static inline void chunk_clear(chunk_t* chunk) {
     free(chunk->data);
     chunk->data = NULL;
 }
 
-int pool_init(pool_t* pool, int width, int chunk_size, int nchunks)
-{
+int pool_init(pool_t* pool, int width, int chunk_size, int nchunks) {
     pool->width = max(width, sizeof(chunk_slot_t));
     pool->chunk_size = chunk_size;
     pool->nallocated = 0;
@@ -49,8 +46,7 @@ int pool_init(pool_t* pool, int width, int chunk_size, int nchunks)
     return err;
 }
 
-void* pool_alloc(pool_t* pool)
-{
+void* pool_alloc(pool_t* pool) {
     if (pool->cur == NULL) {
         // The chunk is full
         chunk_t* new_chunk = (chunk_t*)vector_push(&pool->chunks);
@@ -69,8 +65,7 @@ void* pool_alloc(pool_t* pool)
     return ret;
 }
 
-void pool_clear(pool_t* pool)
-{
+void pool_clear(pool_t* pool) {
     for (int i = 0; i < pool->chunks.size; ++i)
         chunk_clear(&((chunk_t*)pool->chunks.data)[i]);
     vector_clear(&pool->chunks);

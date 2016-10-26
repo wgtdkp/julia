@@ -8,8 +8,7 @@
 #include <stdint.h>
 
 
-int vector_init(vector_t* vec, int width, int size)
-{
+int vector_init(vector_t* vec, int width, int size) {
     assert(width != 0);
     if (size != 0) {
         vec->data = malloc(width * size);
@@ -25,8 +24,7 @@ int vector_init(vector_t* vec, int width, int size)
     return OK;
 }
 
-int vector_reserve(vector_t* vec, int c)
-{
+int vector_reserve(vector_t* vec, int c) {
     if (c != 0) {
         assert(vec->data == NULL);
         vec->data = malloc(vec->width * c);
@@ -36,8 +34,7 @@ int vector_reserve(vector_t* vec, int c)
     return OK;
 }
 
-int vector_resize(vector_t* vec, int new_size)
-{
+int vector_resize(vector_t* vec, int new_size) {
     if (new_size > vec->capacity) {
         int new_capacity = max(new_size, vec->capacity * 2 + 1);
         vec->data = realloc(vec->data, vec->width * new_capacity);
@@ -50,8 +47,7 @@ int vector_resize(vector_t* vec, int new_size)
     return OK;
 }
 
-void vector_clear(vector_t* vec)
-{
+void vector_clear(vector_t* vec) {
     vec->size = 0;
     vec->capacity = 0;
     free(vec->data);

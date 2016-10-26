@@ -2,8 +2,7 @@
 
 #include <assert.h>
 
-int list_insert(list_t* list, list_node_t* pos, list_node_t* new_node)
-{
+int list_insert(list_t* list, list_node_t* pos, list_node_t* new_node) {
     assert(pos != NULL);
     new_node->next = pos->next;
     if (new_node->next != NULL)
@@ -17,8 +16,7 @@ int list_insert(list_t* list, list_node_t* pos, list_node_t* new_node)
     return OK;
 }
 
-int list_delete(list_t* list, list_node_t* x)
-{   
+int list_delete(list_t* list, list_node_t* x) {
     assert(list->size > 0 && x != &list->dummy);
     x->prev->next = x->next;
     if (x->next != NULL)
