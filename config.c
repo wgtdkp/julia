@@ -11,20 +11,17 @@ if ((cond)) {                       \
     return ERROR;                   \
 };
 
-static inline const string_t juson_val2str(juson_value_t* val)
-{
+static inline const string_t juson_val2str(juson_value_t* val) {
     string_t ret = {(char*)val->sval, val->len};
     ret.data[ret.len] = 0;
     return ret;
 }
 
-static void config_init(config_t* cfg)
-{
+static void config_init(config_t* cfg) {
     memset(cfg, 0, sizeof(*cfg));
 }
 
-int config_load(config_t* cfg, char* file_name)
-{
+int config_load(config_t* cfg, char* file_name) {
     config_init(cfg);
 
     juson_doc_t json;
@@ -84,8 +81,7 @@ int config_load(config_t* cfg, char* file_name)
     return OK;
 }
 
-void config_destroy(config_t* cfg)
-{
+void config_destroy(config_t* cfg) {
     free(cfg->text);
     vector_clear(&cfg->locations);
 }

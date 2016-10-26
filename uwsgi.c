@@ -164,6 +164,5 @@ int uwsgi_open_connection(request_t* r, location_t* loc) {
         return -1;
     }
     r->uc->r = r;
-
     return fd;
 }

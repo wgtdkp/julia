@@ -4,8 +4,7 @@
 #include <stdio.h>
 #include <time.h>
 
-void ju_error(const char* format, ...)
-{
+void ju_error(const char* format, ...) {
     fprintf(stderr, "error: ");
     
     va_list args;
@@ -16,8 +15,7 @@ void ju_error(const char* format, ...)
     fprintf(stderr, "\n");
 }
 
-void ju_log(const char* format, ...)
-{
+void ju_log(const char* format, ...) {
     time_t t = time(NULL);
     struct tm tm = *localtime(&t);
     char file_name[64];
