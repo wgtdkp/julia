@@ -255,7 +255,8 @@ int parse_request_line(request_t* r) {
             goto done;
 
         default:
-            assert(0);
+            printf("r->state: %d\n", r->state);
+            assert(false);
         }
     }
 
@@ -591,7 +592,8 @@ static int parse_uri(uri_t* uri, char* p) {
 #   undef ALLOWED_IN_QUERY
 
     default:
-        assert(0);
+        printf("uri->state: %d\n", uri->state);
+        assert(false);
     }
     
     return OK;
@@ -736,7 +738,8 @@ int parse_header_line(request_t* r) {
             break;
 
         default:
-            assert(0);
+            printf("r->state: %d\n", r->state);
+            assert(false);
         }
     }
     
@@ -846,7 +849,7 @@ int parse_header_accept(request_t* r) {
 }
 
 int parse_request_body_chunked(request_t* r) {
-    assert(0);
+    assert(false);
     buffer_t* b = &r->rb;
     for (char* p = b->begin; p < b->end; ++p) {
         //char ch = *p;

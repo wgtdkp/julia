@@ -18,8 +18,6 @@
  */
 int buffer_recv(buffer_t* buffer, int fd)
 {
-    //assert(!buffer_full(buffer));
-    //int read_n = 0;
     while (!buffer_full(buffer)) {
         int margin = buffer->limit - buffer->end;
         int len = recv(fd, buffer->end, margin, 0);

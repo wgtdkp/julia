@@ -74,7 +74,6 @@ static inline bool buffer_full(buffer_t* buffer)
 
 static inline int buffer_margin(buffer_t* buffer)
 {
-    assert(buffer->limit - buffer->end >= 0);
     return buffer->limit - buffer->end;
 }
 

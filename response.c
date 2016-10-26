@@ -242,7 +242,6 @@ static char* err_page(int status, int* len);
 static const string_t status_repr(int status);
 static void response_put_status_line(request_t* request);
 static void response_put_date(request_t* r);
-static int put_response(request_t* r);
 
 void mime_map_init(void) {
     int n = sizeof(mime_tb) / sizeof(mime_tb[0]);
@@ -327,7 +326,6 @@ static void response_put_status_line(request_t* r) {
     if (r->version.minor == 1) {
         version = STRING("HTTP/1.1 ");
     } else {
-        //assert(false);
         version = STRING("HTTP/1.0 ");
     }
     
@@ -371,14 +369,12 @@ int response_build_err(request_t* r, int err) {
     }
     
     appended = buffer_append_cstring(b, CRLF);
-    assert(appended == strlen(CRLF));
     
     if (page != NULL) {
         
         buffer_append_string(b, &(string_t){page, page_len});
         appended = buffer_append_string(b,
                 &(string_t){err_page_tail, page_tail_len});
-        assert(appended == page_tail_len);
     }
     connection_disable_in(r->c);
     connection_enable_out(r->c);
@@ -409,7 +405,7 @@ static char* err_page(int status, int* len) {
     ERR_CASE(303)
     case 304: 
     case 305:
-        assert(0);
+        assert(false);
         return NULL;
     ERR_CASE(307)
     ERR_CASE(400)
@@ -441,7 +437,7 @@ static char* err_page(int status, int* len) {
 #   undef ERR_CASE 
     
     default:
-        assert(0);
+        assert(false);
         *len = 0; 
         return NULL;
     }
@@ -492,7 +488,7 @@ static const string_t status_repr(int status) {
     case 504: return STRING("504 Gateway Time-out");
     case 505: return STRING("505 HTTP Version not supported");
     default:
-        assert(0);  
+        assert(false);  
         return string_null;
     }
     

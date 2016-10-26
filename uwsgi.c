@@ -1,5 +1,6 @@
 #include "server.h"
 
+/*
 static int uwsgi_buffer_append_kv(buffer_t* buffer, string_t* k, string_t* v) {
     int len = buffer_append_u16le(buffer, k->len);
     len += buffer_append_string(buffer, k);
@@ -7,7 +8,7 @@ static int uwsgi_buffer_append_kv(buffer_t* buffer, string_t* k, string_t* v) {
     len += buffer_append_string(buffer, v);
     return len;
 }
-
+*/
 #define UWSGI_KV_LEN(k, v)  (sizeof(k) - 1 + sizeof(v) - 1 + 2 + 2)
 #define UWSGI_KSV_LEN(k, v) (sizeof(k) -1 + (v)->len + 2 + 2)
 

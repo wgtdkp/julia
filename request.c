@@ -239,6 +239,7 @@ int send_response_file(request_t* r) {
     return OK; // Make compiler happy
 }
 
+static int cnt = 0;
 int handle_response(connection_t* c) {
     request_t* r = c->r;
     int err;
@@ -246,13 +247,16 @@ int handle_response(connection_t* c) {
         err = r->out_handler(r);
     } while (err == OK && !r->response_done);
     if (r->response_done) {
-        if (r->pass || !r->keep_alive) {
+        connection_disable_out(c);        
+        request_clear(r);
+        if (!r->keep_alive) {
             close_connection(c);
         } else if (!r->pass) {
             connection_enable_in(c);
-            connection_disable_out(c);
-            request_clear(r);
         }
+        //if (++cnt >= 1000)
+        //    exit(0);
+        //printf("%d\n", ++cnt); fflush(stdout);
     }
     return err;
 }
@@ -282,7 +286,6 @@ static location_t* match_location(string_t* path) {
         if (strncasecmp(loc->path.data, path->data, loc->path.len) == 0)
             return loc;
     }
-    //assert(false);
     return NULL;
 }
 
@@ -387,7 +390,7 @@ static int request_handle_headers(request_t* r) {
             }
         } break;
         default:
-            assert(0);
+            assert(false);
         }
     }
     
@@ -433,7 +436,6 @@ static int header_handle_t_encoding(request_t* r, int offset) {
 }
 
 static int header_handle_content_length(request_t* r, int offset) {
-    assert(string_eq(&r->header_name, &STRING("content_length")));
     header_handle_generic(r, offset);
     //sring_t* name = &r->header_name;
     string_t* val = &r->header_value;
