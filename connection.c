@@ -35,11 +35,11 @@ void close_connection(connection_t* c) {
     if (c->side == C_SIDE_FRONT) {
         if (c->r->uc) {
             close_connection(c->r->uc);
-            c->r->uc = NULL;
         }
         pool_free(&request_pool, c->r);
     } else {
         c->r->uc = NULL;
+        c->r->pass = false;
     }
     pool_free(&connection_pool, c);
 }

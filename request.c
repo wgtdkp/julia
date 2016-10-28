@@ -147,7 +147,13 @@ void request_release(request_t* r) {
     // TODO(wgtdkp): ther won't by any dynamic allocated resource!!!
 }
 
-// Send recived data to backend
+/*
+ * Send recived data to backend
+ * Return:
+ *  OK: send all data in buffer
+ *  AGAIN: send partial data
+ *  ERROR: error occurred, the upstream connection must be closed
+ */
 int handle_pass(connection_t* uc) {
     request_t* r = uc->r;
     buffer_t* b = &r->rb;
@@ -158,30 +164,30 @@ int handle_pass(connection_t* uc) {
         buffer_clear(b);
         connection_enable_in(r->c);
         connection_disable_out(uc);
-        if (r->body_done) {
-            connection_enable_in(uc);
-        }
     } else if (err == ERROR) {
         // The connection has been closed by peer
-        close_connection(uc);
-        // May use better error code
         response_build_err(r, 503);
     }
     return err;
 }
 
-// The upstream connection is closed every response finished
+/*
+ * The upstream connection is closed every response finished
+ * Return:
+ *  OK, ERROR: the upstream connection must be closed
+ *  AGAIN: 
+ */
 int handle_upstream(connection_t* uc) {
     request_t* r = uc->r;
     buffer_t* b = &r->sb;
     int err = buffer_recv(b, uc->fd);
     if (err == OK) {
         // The connection has been closed by peer
-        close_connection(uc);
+        return ERROR;
     } else if (err == ERROR) {
-        close_connection(uc);
         // Error in backend
         response_build_err(r, 503);
+        return ERROR;
     } else if (buffer_full(b)) {
         //connection_disable_in(uc);
     }
@@ -197,8 +203,6 @@ int send_response_buffer(request_t* r) {
         buffer_clear(b);
         if (r->pass) {
             if (r->uc == NULL) {
-                // Have send all data from back side
-                //close_connection(c);
                 r->response_done = true;
                 return OK;           
             }
@@ -207,10 +211,10 @@ int send_response_buffer(request_t* r) {
             r->out_handler = send_response_file;
             return OK;
         }
+        connection_disable_out(c);
         r->response_done = true;
         return OK;
     } else if (err == ERROR) {
-        close_connection(c);
         return ERROR;
     }
     return AGAIN;
@@ -232,7 +236,6 @@ int send_response_file(request_t* r) {
             if (errno == EAGAIN)
                 return AGAIN;
             ERR_ON(1, "sendfile");
-            close_connection(c);
             return ERROR;
         }
     }
@@ -249,14 +252,11 @@ int handle_response(connection_t* c) {
     if (r->response_done) {
         connection_disable_out(c);        
         request_clear(r);
-        if (!r->keep_alive) {
-            close_connection(c);
-        } else if (!r->pass) {
+        if (r->keep_alive) {
             connection_enable_in(c);
+        } else {
+            return ERROR;
         }
-        //if (++cnt >= 1000)
-        //    exit(0);
-        //printf("%d\n", ++cnt); fflush(stdout);
     }
     return err;
 }
@@ -265,11 +265,9 @@ int handle_request(connection_t* c) {
     request_t* r = c->r;
     buffer_t* b = &r->rb;
     int err = buffer_recv(b, c->fd);
-    //print_buffer(buffer);
     if (err != AGAIN) {
         // Client closed the connection or error occcurred
-        close_connection(c);
-        return OK;
+        return ERROR;
     }
     
     do {
@@ -309,6 +307,7 @@ static int request_handle_uri(request_t* r) {
             r->pass = false;
             return response_build_err(r, 503);
         }
+        printf("fd: %d\n", fd);
         return OK;
     }
     
@@ -551,7 +550,7 @@ int request_process_headers(request_t* r) {
         }
     }
     
-    // If error, log this email to contact
+    // If error, ju_log this email to contact
     if (headers->from.data) {
         // Used for logger
     }

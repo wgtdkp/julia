@@ -3,7 +3,6 @@
 int root_fd;
 static pid_t worker_pid;
 static clock_t total = 0;
-static int total_reqs = 0;
 //static int max_connection = 0;
 //static int max_response = 0;
 
@@ -12,13 +11,14 @@ static int server_init(char* cfg_file);
 static void usage(void);
 
 static void sig_int(int signo) {
-    float total_time = 1.0f * total / CLOCKS_PER_SEC;
-    printf("[%d]: time: %f, total reqs: %d, RPS: %f\n",
-            getpid(), total_time, total_reqs, total_reqs / total_time);
-    printf("connection pool allocated: %d\n", connection_pool.nallocated);
+    //float total_time = 1.0f * total / CLOCKS_PER_SEC;
+    //printf("[%d]: time: %f, total reqs: %d, RPS: %f\n",
+    //        getpid(), total_time, total_reqs, total_reqs / total_time);
+    //printf("connection pool allocated: %d\n", connection_pool.nallocated);
     //printf("max c allocated: %d\n", max_connection);
-    printf("resquest pool allocated: %d\n", request_pool.nallocated);
+    //printf("resquest pool allocated: %d\n", request_pool.nallocated);
     //printf("max response allocated: %d\n", max_response);
+    printf("julia exited...\n");
     fflush(stdout);
     if (worker_pid != getpid())
         kill(worker_pid, SIGKILL);
@@ -144,6 +144,12 @@ work:
             if (WIFEXITED(stat))
                 exit(ERROR);
             // Worker unexpectly exited, restart it
+            time_t t = time(NULL);
+            struct tm tm = *localtime(&t);
+            ju_error("%d-%d-%d %d:%d:%d: error occurred...\n"
+                          "restarting...\n",
+                  tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
+                  tm.tm_hour, tm.tm_min, tm.tm_sec);
         } else {
             break;
         }
@@ -180,26 +186,23 @@ work:
                 accept_connection(listen_fd);
                 continue;
             }
+            int err;
+            connection_t* c = events[i].data.ptr;
             if (events[i].events & EPOLLIN) {
-                // Receive request or data
-                ++total_reqs;
-                //max_response = max(max_response, response_pool.nallocated);
-                connection_t* c = events[i].data.ptr;
-                // The event we register to epoll is a EPOLLIN of backend c
-                if (c->side == C_SIDE_BACK) {
-                    handle_upstream(c);
-                } else {
-                    handle_request(c);
+                err = (c->side == C_SIDE_BACK) ?
+                      handle_upstream(c): handle_request(c);
+                if (err == ERROR) {
+                    close_connection(c);
+                    bzero(&events[i], sizeof(events[i]));
                 }
             }
-            // TODO(wgtdkp): checking errors?
+            
             if (events[i].events & EPOLLOUT) {
-                // Send response
-                connection_t* c = events[i].data.ptr;
-                if (c->side == C_SIDE_BACK) {
-                    handle_pass(c);
-                } else {
-                    handle_response(c);
+                err = (c->side == C_SIDE_BACK) ? 
+                      handle_pass(c): handle_response(c);
+                if (err == ERROR) {
+                    close_connection(c);
+                    bzero(&events[i], sizeof(events[i]));
                 }
             }
         }

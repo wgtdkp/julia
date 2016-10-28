@@ -157,10 +157,11 @@ int uwsgi_open_connection(request_t* r, location_t* loc) {
     r->uc->side = C_SIDE_BACK;
 
     set_nonblocking(r->uc->fd);
-    r->uc->event.events = EVENTS_OUT;
+    r->uc->event.events = EVENTS_IN;
     r->uc->event.data.ptr = r->uc;
     if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, r->uc->fd, &r->uc->event) == -1) {
-        close_connection(r->uc);
+        // It will be closed later
+        //close_connection(r->uc);
         return -1;
     }
     r->uc->r = r;

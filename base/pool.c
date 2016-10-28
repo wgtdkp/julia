@@ -49,7 +49,7 @@ int pool_init(pool_t* pool, int width, int chunk_size, int nchunks) {
 void* pool_alloc(pool_t* pool) {
     if (pool->cur == NULL) {
         // The chunk is full
-        chunk_t* new_chunk = (chunk_t*)vector_push(&pool->chunks);
+        chunk_t* new_chunk = vector_push(&pool->chunks);
         if (new_chunk == NULL)
             return NULL;
         if (chunk_init(new_chunk, pool->width, pool->chunk_size) != OK)

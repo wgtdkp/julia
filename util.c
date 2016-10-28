@@ -19,7 +19,7 @@ void ju_log(const char* format, ...) {
     time_t t = time(NULL);
     struct tm tm = *localtime(&t);
     char file_name[64];
-    snprintf(file_name, 64 - 1, "log-%d-%d-%d.txt",
+    snprintf(file_name, 64 - 1, "ju_log-%d-%d-%d.txt",
             tm.tm_year, tm.tm_mon + 1, tm.tm_mday);
 
     FILE* log_file = fopen(file_name, "a+");

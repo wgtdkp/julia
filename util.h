@@ -19,19 +19,23 @@
 
 #define CRLF                "\r\n"
 
-#define EXIT_ON(cond, msg)  \
-do {                        \
-    if (cond) {             \
-        perror(msg);        \
-        abort();            \
-    }                       \
+#define EXIT_ON(cond, msg)          \
+do {                                \
+    if (cond) {                     \
+        fprintf(stderr, "%s: %d: ", \
+                __FILE__, __LINE__);\
+        perror(msg);                \
+        abort();                    \
+    }                               \
 } while (0)
 
-#define ERR_ON(cond, msg)   \
-do {                        \
-    if (cond) {             \
-        perror(msg);        \
-    }                       \
+#define ERR_ON(cond, msg)           \
+do {                                \
+    if (cond) {                     \
+        fprintf(stderr, "%s: %d: ", \
+                __FILE__, __LINE__);\
+        perror(msg);                \
+    }                               \
 } while (0)
 
 

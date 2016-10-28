@@ -1,12 +1,12 @@
 TARGET = julia
-CC = gcc
+CC = gcc -std=c11
 SRCS = base/buffer.c base/list.c\
 		base/map.c base/pool.c\
 		base/string.c base/vector.c\
 	  config.c connection.c juson/juson.c parse.c\
 		request.c response.c server.c util.c uwsgi.c
 
-CFLAGS = -g -std=c11 -Wall -DDEBUG -D_XOPEN_SOURCE -D_GNU_SOURCE -I./
+CFLAGS = -g -Wall -D_XOPEN_SOURCE -D_GNU_SOURCE -I./
 
 INSTALL_DIR = /usr/local/$(TARGET)/
 BIN_DIR = /usr/local/bin/

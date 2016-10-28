@@ -374,7 +374,8 @@ int response_build_err(request_t* r, int err) {
     }
     connection_disable_in(r->c);
     connection_enable_out(r->c);
-    return ERROR;
+    r->body_done = true;
+    return OK;
 }
 
 static char* err_page(int status, int* len) {
