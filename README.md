@@ -78,4 +78,16 @@ have fun :)
 
 have fun :)
 
+### 性能
+benchmark: ab
+
+均为8 worker
+
+并发 nginx julia
+
+10   52K  54K
+
+100  56K  56K
+
+1000 46K  44K
  

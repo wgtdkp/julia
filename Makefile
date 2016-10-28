@@ -17,7 +17,7 @@ OBJS = $(addprefix $(OBJS_DIR), $(SRCS:.c=.o))
 install: all uninstall
 	@sudo mkdir -p $(INSTALL_DIR)
 	@sudo cp config.json $(INSTALL_DIR)config.json
-	@sudo cp -a install/www/. /var/www/
+	@sudo cp -a www/. /var/www/
 	@sudo cp $(OBJS_DIR)$(TARGET) $(BIN_DIR)$(TARGET)
 
 uninstall:

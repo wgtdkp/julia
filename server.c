@@ -122,6 +122,8 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    get_pid();
+
     if (config_load(&server_cfg) != OK) {
         raise(SIGINT);
     }
