@@ -10,7 +10,7 @@
     // Enabled only when debug = false 
     "daemon": false,
     // Number of workers
-    "worker": 8, // no more than cpu cores
+    "worker": 1, // no more than cpu cores
 
     "port": 2000,
     "root": "www",
@@ -25,9 +25,12 @@
             // Not supported yet
             "index": ["index.html", "index.htm"] 
         }],
+        ["/", {}]
+        /*,
         ["/", {
             "pass": ["127.0.0.1", 3030],
-            "protocol": "uwsgi" /* May support fastcgi in the future */
+            "protocol": "uwsgi" // May support fastcgi in the future
         }]
+        */
     ]
 }

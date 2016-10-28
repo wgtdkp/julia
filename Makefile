@@ -7,20 +7,22 @@ SRCS = base/buffer.c base/list.c\
        request.c response.c server.c util.c uwsgi.c
 
 INSTALL_DIR = /usr/local/$(TARGET)/
+
 CFLAGS = -g -Wall -DINSTALL_DIR=\"$(INSTALL_DIR)\" -D_XOPEN_SOURCE -D_GNU_SOURCE -I./
 
 BIN_DIR = /usr/local/bin/
-CONFIG = config.json
 OBJS_DIR = build/
 OBJS = $(addprefix $(OBJS_DIR), $(SRCS:.c=.o))
 
 install: all uninstall
 	@sudo mkdir -p $(INSTALL_DIR)
-	@sudo cp -a install/. $(INSTALL_DIR)
+	@sudo cp config.json $(INSTALL_DIR)config.json
+	@sudo cp -a install/www/. /var/www/
 	@sudo cp $(OBJS_DIR)$(TARGET) $(BIN_DIR)$(TARGET)
 
 uninstall:
 	@sudo rm -f $(BIN_DIR)$(TARGET)
+	@sudo rm -rf /var/www/
 	@sudo rm -rf $(INSTALL_DIR)
 
 all:

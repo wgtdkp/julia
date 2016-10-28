@@ -126,6 +126,10 @@ int main(int argc, char* argv[]) {
         raise(SIGINT);
     }
 
+    if (server_cfg.debug) {
+        goto work;
+    }
+
     if (server_cfg.daemon) {
         daemon(1, 0);
     }
@@ -135,10 +139,6 @@ int main(int argc, char* argv[]) {
         exit(ERROR);
     }
     save_pid(getpid());
-
-    if (server_cfg.debug) {
-        goto work;
-    }
 
     int nworker = 0;
     while (true) {
