@@ -19,7 +19,7 @@
 
 #define CRLF                "\r\n"
 
-#define EXIT_ON(cond, msg)          \
+#define ABORT_ON(cond, msg)          \
 do {                                \
     if (cond) {                     \
         fprintf(stderr, "%s: %d: ", \

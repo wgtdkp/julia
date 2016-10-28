@@ -54,8 +54,8 @@ int add_listener(int* listen_fd) {
 
 int set_nonblocking(int fd) {
     int flag = fcntl(fd, F_GETFL, 0);
-    EXIT_ON(flag == -1, "fcntl: F_GETFL");
+    ABORT_ON(flag == -1, "fcntl: F_GETFL");
     flag |= O_NONBLOCK;
-    EXIT_ON(fcntl(fd, F_SETFL, flag) == -1, "fcntl: FSETFL");
+    ABORT_ON(fcntl(fd, F_SETFL, flag) == -1, "fcntl: FSETFL");
     return 0;
 }

@@ -3,8 +3,17 @@
      * If a directive is specified more than once,
      * the first one will be active.
      */
+
+    // If true, there will only be one process
+    "debug": false,
+    // If true, julia run as daemon.
+    // Enabled only when debug = false 
+    "daemon": true,
+    // Number of workers
+    "worker": 8, // no more than cpu cores
+
     "port": 12345,
-    "root": "www",
+    "root": "/home/wgtdkp/julia/install/www",
     /*
      * The order the locations specified, 
      * is the order they are matched.

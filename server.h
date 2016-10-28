@@ -41,13 +41,10 @@
 #include <sys/sendfile.h>
 #include <sys/un.h>
 
-
 #define MAX_EVENT_NUM   (65536)
 
 #define EVENTS_IN   (EPOLLIN)
 #define EVENTS_OUT  (EPOLLOUT)
-
-extern int root_fd;
 
 /*
  * Config
@@ -69,14 +66,17 @@ typedef struct {
 
 typedef struct {
     uint16_t port;
-    string_t root;
+    int root_fd;
+    bool debug;
+    bool daemon;
+    vector_t workers;
     vector_t locations;
     char* text;
 } config_t;
 
 extern config_t server_cfg;
 
-int config_load(config_t* cfg, char* file_name);
+int config_load(config_t* cfg);
 void config_destroy(config_t* cfg);
 
 /*

@@ -1,28 +1,50 @@
 #include "server.h"
 
-int root_fd;
-static pid_t worker_pid;
-static clock_t total = 0;
-//static int max_connection = 0;
-//static int max_response = 0;
-
 static int startup(unsigned short port);
-static int server_init(char* cfg_file);
+static int server_init(void);
 static void usage(void);
 
+static void usage(void) {
+    printf("Usage:\n"
+           "    julia [-s signal]    signal could only be stop\n");
+    exit(OK);
+}
+
+static void save_pid(int pid) {
+    FILE* fp = fopen(INSTALL_DIR "julia.pid", "w");
+    if (fp == NULL) {
+        ju_error("open pid file: " INSTALL_DIR "julia.pid failed");
+        exit(ERROR);
+    }
+    fprintf(fp, "%d", pid);
+    fclose(fp);
+}
+
+static int get_pid(void) {
+    FILE* fp = fopen(INSTALL_DIR "julia.pid", "a+");
+    if (fp == NULL) {
+        ju_error("open pid file: " INSTALL_DIR "julia.pid failed");
+        exit(ERROR);
+    }
+    int pid = 0;
+    fscanf(fp, "%d", &pid);
+    return pid;
+}
+
+static void send_signal(const char* signal) {
+    if (strncasecmp(signal, "stop", 4) == 0) {
+        kill(-get_pid(), SIGINT);
+    } else {
+        usage();
+    }
+    exit(OK);
+}
+
 static void sig_int(int signo) {
-    //float total_time = 1.0f * total / CLOCKS_PER_SEC;
-    //printf("[%d]: time: %f, total reqs: %d, RPS: %f\n",
-    //        getpid(), total_time, total_reqs, total_reqs / total_time);
-    //printf("connection pool allocated: %d\n", connection_pool.nallocated);
-    //printf("max c allocated: %d\n", max_connection);
-    //printf("resquest pool allocated: %d\n", request_pool.nallocated);
-    //printf("max response allocated: %d\n", max_response);
-    printf("julia exited...\n");
-    fflush(stdout);
-    if (worker_pid != getpid())
-        kill(worker_pid, SIGKILL);
-    exit(0);
+    ju_log("julia exited...");
+    save_pid(0);
+    kill(-getpid(), SIGINT);
+    raise(SIGKILL);
 }
 
 static int startup(uint16_t port) {
@@ -42,9 +64,9 @@ static int startup(uint16_t port) {
 
     int on = 1;
     setsockopt(listen_fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
-#ifdef REUSE_PORT
-    setsockopt(listen_fd, SOL_SOCKET, SO_REUSEPORT, &on, sizeof(on));
-#endif
+    if (server_cfg.workers.size > 1) {
+        setsockopt(listen_fd, SOL_SOCKET, SO_REUSEPORT, &on, sizeof(on));
+    }
 
     memset((void*)&server_addr, 0, addr_len);
     server_addr.sin_family = AF_INET;
@@ -54,21 +76,16 @@ static int startup(uint16_t port) {
         return ERROR;
     }
 
-    // TODO(wgtdkp): make parameter 'backlog' configurable?
     if (listen(listen_fd, 1024) < 0) {
         return ERROR;
     }
     return listen_fd;
 }
 
-static int server_init(char* cfg_file) {
+static int server_init(void) {
     // Set limits
     struct rlimit nofile_limit = {65535, 65535};
     setrlimit(RLIMIT_NOFILE, &nofile_limit);
-    
-    // Config init
-    if (config_load(&server_cfg, cfg_file) != OK)
-        return ERROR;
     
     parse_init();
     header_map_init();
@@ -76,15 +93,9 @@ static int server_init(char* cfg_file) {
     
     pool_init(&connection_pool, sizeof(connection_t), 8, 0);
     pool_init(&request_pool, sizeof(request_t), 8, 0);
-    //pool_init(&accept_pool, LIST_WIDTH(accept_type_t), 4, 0);
-    
     
     epoll_fd = epoll_create1(0);
-    EXIT_ON(epoll_fd == ERROR, "epoll_create1");
-
-    root_fd = open(server_cfg.root.data, O_RDONLY);
-    EXIT_ON(root_fd == ERROR, "open(root)");
-    
+    ABORT_ON(epoll_fd == ERROR, "epoll_create1");
     return OK;
 }
 
@@ -92,8 +103,6 @@ static void accept_connection(int listen_fd) {
     while (true) {
         int c_fd = accept(listen_fd, NULL, NULL);
         if (c_fd == ERROR) {
-            // TODO(wgtdkp): handle this error
-            // There could be too many connections(beyond OPEN_MAX)
             ERR_ON((errno != EWOULDBLOCK), "accept");
             break;
         }
@@ -101,114 +110,102 @@ static void accept_connection(int listen_fd) {
     }
 }
 
-static void usage(void) {
-    fprintf(stderr, "Usage:\n"
-                    "    julia config_file\n");
-}
-
 int main(int argc, char* argv[]) {
-    if (argc < 2) {
-        usage();
-        exit(ERROR);
-    }
-    worker_pid = getpid();
-
-#ifdef REUSE_PORT
-#define NCORES  (8)
-    int workers[NCORES];
-    for (int i = 0; i < NCORES - 1; ++i) {
-        pid_t pid = fork();
-        if (pid == 0) {
-            goto work;
-        } else {
-            workers[i] = pid;
+    if (argc >= 2) {
+        if (argv[1][0] != '-') {
+            usage();
+        }
+        switch (argv[1][1]) {
+        case 'h': usage(); break;
+        case 's': send_signal(argv[2]); break;
+        default: usage(); break;
         }
     }
-    workers[NCORES - 1] = getpid();
-    cpu_set_t mask;
-    for (int i = 0; i < NCORES; ++i) {
-        CPU_ZERO(&mask);
-        CPU_SET(i, &mask);
-        sched_setaffinity(workers[i], sizeof(cpu_set_t), &mask);
-        //sched_getaffinity(NCORES[i], sizeof(cpu_set_t), &mask);
+
+    if (config_load(&server_cfg) != OK) {
+        raise(SIGINT);
     }
-work:
-#elif !defined DEBUG
-    while (1) {
-        int stat;
-        worker_pid = fork();
-        if (worker_pid < 0)
-            perror("fork");
-        else if (worker_pid > 0) {
+
+    if (server_cfg.daemon) {
+        daemon(1, 0);
+    }
+
+    if (get_pid() != 0) {
+        ju_error("julia has already been running...");
+        exit(ERROR);
+    }
+    save_pid(getpid());
+
+    if (server_cfg.debug) {
+        goto work;
+    }
+
+    int nworker = 0;
+    while (true) {
+        if (nworker >= server_cfg.workers.size) {
+            int stat;
             wait(&stat);
             if (WIFEXITED(stat))
-                exit(ERROR);
+                raise(SIGINT);
             // Worker unexpectly exited, restart it
-            time_t t = time(NULL);
-            struct tm tm = *localtime(&t);
-            ju_error("%d-%d-%d %d:%d:%d: error occurred...\n"
-                          "restarting...\n",
-                  tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
-                  tm.tm_hour, tm.tm_min, tm.tm_sec);
-        } else {
-            break;
+            ju_log("julia failed, restarting...");
         }
+        int pid = fork();
+        ABORT_ON(pid < 0, "fork");
+        if (pid == 0)
+            break;
+        int* worker = vector_at(&server_cfg.workers, nworker++);
+        *worker = pid;
     }
-#endif
-    int listen_fd = ERROR;
 
-    if (server_init(argv[1]) != OK)
-        return ERROR;
-    
-    listen_fd = startup(server_cfg.port);
-    if (listen_fd < 0) {
-        fprintf(stderr, "startup server failed\n");
+work:;
+    int listen_fd;
+    if (server_init() != OK ||
+        (listen_fd = startup(server_cfg.port)) < 0) {
+        ju_error("startup server failed");        
         exit(ERROR);
     }
     
-    printf("julia started...\n");
-    printf("listening at port: %u\n", server_cfg.port);
-    print_string("doc root: %*s\n", &server_cfg.root);
-
+    ju_log("julia started...");
+    ju_log("listening at port: %u", server_cfg.port);
     assert(add_listener(&listen_fd) != ERROR);
-    while (true) {
-        int nfds = epoll_wait(epoll_fd, events, MAX_EVENT_NUM, 30);
-        if (nfds == ERROR) {
-            EXIT_ON(errno != EINTR, "epoll_wait");
+
+wait:;
+    int nfds = epoll_wait(epoll_fd, events, MAX_EVENT_NUM, 30);
+    if (nfds == ERROR) {
+        ABORT_ON(errno != EINTR, "epoll_wait");
+    }
+    
+    //TODO(wgtdkp): multithreading here: seperate fds to several threads
+    for (int i = 0; i < nfds; ++i) {
+        int fd = *((int*)(events[i].data.ptr));
+        if (fd == listen_fd) {
+            // We could accept more than one c per request
+            accept_connection(listen_fd);
+            continue;
+        }
+        int err;
+        connection_t* c = events[i].data.ptr;
+        if (events[i].events & EPOLLIN) {
+            err = (c->side == C_SIDE_BACK) ?
+                  handle_upstream(c): handle_request(c);
+            if (err == ERROR) {
+                close_connection(c);
+                bzero(&events[i], sizeof(events[i]));
+            }
         }
         
-        clock_t begin = clock();
-        //TODO(wgtdkp): multithreading here: seperate fds to several threads
-        for (int i = 0; i < nfds; ++i) {
-            int fd = *((int*)(events[i].data.ptr));
-            if (fd == listen_fd) {
-                // We could accept more than one c per request
-                accept_connection(listen_fd);
-                continue;
-            }
-            int err;
-            connection_t* c = events[i].data.ptr;
-            if (events[i].events & EPOLLIN) {
-                err = (c->side == C_SIDE_BACK) ?
-                      handle_upstream(c): handle_request(c);
-                if (err == ERROR) {
-                    close_connection(c);
-                    bzero(&events[i], sizeof(events[i]));
-                }
-            }
-            
-            if (events[i].events & EPOLLOUT) {
-                err = (c->side == C_SIDE_BACK) ? 
-                      handle_pass(c): handle_response(c);
-                if (err == ERROR) {
-                    close_connection(c);
-                    bzero(&events[i], sizeof(events[i]));
-                }
+        if (events[i].events & EPOLLOUT) {
+            err = (c->side == C_SIDE_BACK) ? 
+                  handle_pass(c): handle_response(c);
+            if (err == ERROR) {
+                close_connection(c);
+                bzero(&events[i], sizeof(events[i]));
             }
         }
-        total += clock() - begin;
     }
+    goto wait;
 
     close(listen_fd);
-    return 0;
+    return OK;
 }

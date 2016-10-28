@@ -307,7 +307,6 @@ static int request_handle_uri(request_t* r) {
             r->pass = false;
             return response_build_err(r, 503);
         }
-        printf("fd: %d\n", fd);
         return OK;
     }
     
@@ -320,7 +319,7 @@ static int request_handle_uri(request_t* r) {
         rel_path = uri->abs_path.data + 1;
     }
 
-    int fd = openat(root_fd, rel_path, O_RDONLY);
+    int fd = openat(server_cfg.root_fd, rel_path, O_RDONLY);
     
     // Open the requested resource failed
     if (fd == -1) {

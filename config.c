@@ -18,24 +18,44 @@ static inline const string_t juson_val2str(juson_value_t* val) {
 }
 
 static void config_init(config_t* cfg) {
-    memset(cfg, 0, sizeof(*cfg));
+    memset(cfg, 0, sizeof(config_t));
 }
 
-int config_load(config_t* cfg, char* file_name) {
+int config_load(config_t* cfg) {
     config_init(cfg);
+    const char* cfg_file = INSTALL_DIR "config.json";
 
-    juson_doc_t json;
-    if (cfg->text)
+    if (cfg->text) {
         free(cfg->text);
-    cfg->text = juson_load(file_name);
+    }
+    cfg->text = juson_load(cfg_file);
     if (cfg->text == NULL) {
-        ju_error("load file '%s' failed", file_name);
+        ju_error("load file '%s' failed", cfg_file);
         return ERROR;
     }
-    
+
+    juson_doc_t json;
     juson_value_t* root = juson_parse(&json, cfg->text);
     CFG_ERR_ON(root == NULL || root->t != JUSON_OBJECT, "bad format");
     
+    juson_value_t* debug_val = juson_object_get(root, "debug");
+    CFG_ERR_ON(debug_val == NULL || debug_val->t != JUSON_BOOL,
+               "debug not specified");
+    cfg->debug = debug_val->bval;
+
+    juson_value_t* daemon_val = juson_object_get(root, "daemon");
+    CFG_ERR_ON(daemon_val == NULL || daemon_val->t != JUSON_BOOL,
+               "daemon not specified");
+    cfg->daemon = daemon_val->bval;
+
+    juson_value_t* worker_val = juson_object_get(root, "worker");
+    CFG_ERR_ON(worker_val == NULL || worker_val->t != JUSON_INTEGER,
+               "worker not specified");
+
+    vector_init(&cfg->workers, sizeof(int), worker_val->size);
+    CFG_ERR_ON(cfg->workers.size > sysconf(_SC_NPROCESSORS_ONLN), 
+               "wrokers specified greater than cpu cores");
+
     juson_value_t* port_val = juson_object_get(root, "port");
     if (port_val == NULL || port_val->t != JUSON_INTEGER) {
         cfg->port = 80;
@@ -45,12 +65,16 @@ int config_load(config_t* cfg, char* file_name) {
     
     juson_value_t* root_val = juson_object_get(root, "root");
     CFG_ERR_ON(root_val == NULL || root_val->t != JUSON_STRING,
-            "doc root not specified");
-    cfg->root = juson_val2str(root_val);
+               "doc root not specified");
+    string_t path = juson_val2str(root_val);
+    cfg->root_fd = open(path.data, O_RDONLY);
+    CFG_ERR_ON(cfg->root_fd < 0, "open root failed");
 
     juson_value_t* locations_val = juson_object_get(root, "locations");
-    CFG_ERR_ON(root_val == NULL || locations_val->t != JUSON_ARRAY ||
-            locations_val->size == 0, "parse locations specification failed");
+    CFG_ERR_ON(root_val == NULL ||
+               locations_val->t != JUSON_ARRAY ||
+               locations_val->size == 0,
+               "parse locations specification failed");
     
     vector_init(&cfg->locations, sizeof(location_t), locations_val->size);
     for (int i = 0; i < locations_val->size; ++i) {
