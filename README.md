@@ -23,7 +23,7 @@ A small yet high performance http server and reverse proxy. You may view it as a
 
 ### RUN
 ```shell
-$ julia # default listening at 8000
+$ julia # roo required, default listening at 8000
 ```
 You may modify the config file to specify the port if there is a confliction.
 

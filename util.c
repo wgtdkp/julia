@@ -25,7 +25,7 @@ void ju_log(const char* format, ...) {
         return;
     }
     struct tm tm = *localtime(&t);
-    fprintf(log_file, "[%d: %d: %d: %d:%d:%d] [pid: %d]",
+    fprintf(log_file, "[%4d: %02d: %02d: %02d:%02d:%02d] [pid: %5d]",
             tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
             tm.tm_hour, tm.tm_min, tm.tm_sec, getpid());
 
