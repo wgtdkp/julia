@@ -6,6 +6,8 @@ pool_t connection_pool;
 pool_t request_pool;
 pool_t accept_pool;
 
+static int heap_size = 0;
+static connection_t* connections[MAX_CONNECTION + 1] = {NULL};
 
 int connection_comp(void* lhs, void* rhs) {
     connection_t* lhsc = lhs;
@@ -28,6 +30,10 @@ connection_t* open_connection(int fd) {
     c->event.events = EVENTS_IN;
     c->event.data.ptr = c;
     if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, c->fd, &c->event) == -1) {
+        close_connection(c);
+        return NULL;
+    }
+    if (heap_size > MAX_CONNECTION) {
         close_connection(c);
         return NULL;
     }
@@ -69,9 +75,6 @@ int set_nonblocking(int fd) {
 #define P(i)    (i / 2)
 #define L(i)    (i * 2)
 #define R(i)    (L(i) + 1)
-
-static int heap_size = 0;
-static connection_t* connections[MAX_CONNECTION + 1] = {NULL};
 
 static void heap_shift_up(int idx) {
     int k = idx;
