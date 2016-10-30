@@ -173,7 +173,7 @@ work:;
     assert(add_listener(&listen_fd) != ERROR);
 
 wait:;
-    int nfds = epoll_wait(epoll_fd, events, MAX_EVENT_NUM, 30);
+    int nfds = epoll_wait(epoll_fd, events, MAX_EVENT_NUM, 1);
     if (nfds == ERROR) {
         ABORT_ON(errno != EINTR, "epoll_wait");
     }
@@ -194,6 +194,8 @@ wait:;
             if (err == ERROR) {
                 close_connection(c);
                 bzero(&events[i], sizeof(events[i]));
+            } else {
+                connection_active(c);
             }
         }
         
@@ -203,9 +205,12 @@ wait:;
             if (err == ERROR) {
                 close_connection(c);
                 bzero(&events[i], sizeof(events[i]));
+            } else {
+                connection_active(c);
             }
         }
     }
+    connection_sweep();
     goto wait;
 
     close(listen_fd);

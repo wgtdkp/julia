@@ -8,9 +8,11 @@
     "debug": false,
     // If true, julia run as daemon.
     // Enabled only when debug = false 
-    "daemon": true,
+    "daemon": false,
     // Number of workers
-    "worker": 4, // no more than cpu cores
+    "worker": 8, // no more than cpu cores
+    // Timeout of inactive connection. In second
+    "timeout": 30,
 
     "port": 8000,
     // If relative path, it is relative to the INSTALL_DIR in Makefile

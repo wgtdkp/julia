@@ -12,6 +12,9 @@
     // Number of workers
     "worker": 1, // no more than cpu cores
 
+    // Timeout of inactive connection. In second
+    "timeout": 30,
+
     "port": 2000,
     "root": "www",
     /*

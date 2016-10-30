@@ -250,10 +250,10 @@ int handle_response(connection_t* c) {
         err = r->out_handler(r);
     } while (err == OK && !r->response_done);
     if (r->response_done) {
-        connection_disable_out(c);        
-        request_clear(r);
         if (r->keep_alive) {
+            connection_disable_out(c);        
             connection_enable_in(c);
+            request_clear(r);            
         } else {
             return ERROR;
         }
@@ -426,7 +426,6 @@ static int header_handle_t_encoding(request_t* r, int offset) {
         r->t_encoding = TE_IDENTITY;
     } else {
         // Must close the c as we can't understand the body
-        r->keep_alive = false;
         return response_build_err(r, 415);
     }
     

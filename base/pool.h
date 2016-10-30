@@ -4,7 +4,6 @@
 #include "util.h"
 #include "vector.h"
 
-
 typedef union {
     void* next;
 } chunk_slot_t;

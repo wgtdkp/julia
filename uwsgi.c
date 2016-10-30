@@ -153,6 +153,9 @@ int uwsgi_open_connection(request_t* r, location_t* loc) {
     if (err < 0) return -1;
 
     r->uc = pool_alloc(&connection_pool);
+    connection_register(r->uc);
+    r->uc->active_time = time(NULL);
+
     r->uc->fd = fd;
     r->uc->side = C_SIDE_BACK;
 

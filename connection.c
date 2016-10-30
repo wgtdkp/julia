@@ -6,12 +6,24 @@ pool_t connection_pool;
 pool_t request_pool;
 pool_t accept_pool;
 
+
+int connection_comp(void* lhs, void* rhs) {
+    connection_t* lhsc = lhs;
+    connection_t* rhsc = rhs;
+    return lhsc->active_time < rhsc->active_time ? -1:
+           lhsc->active_time > rhsc->active_time ? 1: 0;
+}
+
 connection_t* open_connection(int fd) {
     connection_t* c = pool_alloc(&connection_pool);
+    connection_register(c);
+    c->active_time = time(NULL);
 
     c->fd = fd;
     c->side = C_SIDE_FRONT;
-    
+    c->r = pool_alloc(&request_pool);
+    request_init(c->r, c);
+
     set_nonblocking(c->fd);
     c->event.events = EVENTS_IN;
     c->event.data.ptr = c;
@@ -19,13 +31,6 @@ connection_t* open_connection(int fd) {
         close_connection(c);
         return NULL;
     }
-    //bzero(&c->event, sizeof(c->event));
-    //c->event.data.ptr = c;
-    //connection_enable_in(c);    
-    
-    c->r = pool_alloc(&request_pool);
-    request_init(c->r, c);
-    //c->nrequests = 0;
     return c;
 }
 
@@ -41,6 +46,7 @@ void close_connection(connection_t* c) {
         c->r->uc = NULL;
         c->r->pass = false;
     }
+    connection_unregister(c);
     pool_free(&connection_pool, c);
 }
 
@@ -58,4 +64,78 @@ int set_nonblocking(int fd) {
     flag |= O_NONBLOCK;
     ABORT_ON(fcntl(fd, F_SETFL, flag) == -1, "fcntl: FSETFL");
     return 0;
+}
+
+#define P(i)    (i / 2)
+#define L(i)    (i * 2)
+#define R(i)    (L(i) + 1)
+
+static int heap_size = 0;
+static connection_t* connections[MAX_CONNECTION + 1] = {NULL};
+
+static void heap_shift_up(int idx) {
+    int k = idx;
+    connection_t* c = connections[k];
+    while (P(k) > 0) {
+        connection_t* pc = connections[P(k)];
+        if (c->active_time >= pc->active_time)
+            break;
+        connections[k] = pc;
+        connections[k]->heap_idx = k;
+        k = P(k);
+    }
+    connections[k] = c;
+    connections[k]->heap_idx = k;
+}
+
+static void heap_shift_down(int idx) {
+    int k = idx;
+    connection_t* c = connections[k];
+    while (true) {
+        int kid = L(k);
+        if (R(k) <= heap_size &&
+            connections[R(k)]->active_time < connections[L(k)]->active_time) {
+            kid = R(k);
+        }
+        if (kid > heap_size ||
+            c->active_time < connections[kid]->active_time) {
+            break;
+        }
+        connections[k] = connections[kid]; 
+        connections[k]->heap_idx = k;
+        k = kid;
+    }
+    connections[k] = c;
+    connections[k]->heap_idx = k;    
+}
+
+void connection_active(connection_t* c) {
+    c->active_time = time(NULL);
+    heap_shift_down(c->heap_idx);
+}
+
+void connection_register(connection_t* c) {
+    connections[++heap_size] = c;
+    heap_shift_up(heap_size);
+}
+
+void connection_unregister(connection_t* c) {
+    assert(heap_size > 0);
+    connections[c->heap_idx] = connections[heap_size];
+    connections[c->heap_idx]->heap_idx = c->heap_idx;
+    --heap_size;
+    if (heap_size > 0) {
+        heap_shift_down(c->heap_idx);
+    }
+}
+
+void connection_sweep(void) {
+    while (heap_size > 0) {
+        connection_t* c = connections[1];
+        if (time(NULL) >= c->active_time + server_cfg.timeout) {
+            close_connection(c);
+        } else {
+            break;
+        }
+    }
 }

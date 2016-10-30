@@ -42,6 +42,7 @@
 #include <sys/un.h>
 
 #define MAX_EVENT_NUM   (65536)
+#define MAX_CONNECTION  (10000)
 
 #define EVENTS_IN   (EPOLLIN)
 #define EVENTS_OUT  (EPOLLOUT)
@@ -59,6 +60,7 @@ typedef struct {
     bool pass;
     int fd;
     string_t path;
+    string_t root;
     string_t host;
     uint16_t port;
     protocol_t protocol;
@@ -69,6 +71,7 @@ typedef struct {
     int root_fd;
     bool debug;
     bool daemon;
+    int timeout;
     vector_t workers;
     vector_t locations;
     char* text;
@@ -284,6 +287,8 @@ typedef struct connection {
     int side;
     julia_epoll_event_t event;
     request_t* r;
+    time_t active_time;
+    int heap_idx;
 } connection_t;
 
 #define HTTP_1_1    (version_t){1, 1}
@@ -293,6 +298,11 @@ connection_t* open_connection(int fd);
 void close_connection(connection_t* c);
 int add_listener(int* listen_fd);
 int set_nonblocking(int fd);
+int connection_comp(void* lhs, void* rhs);
+void connection_active(connection_t* c);
+void connection_register(connection_t* c);
+void connection_unregister(connection_t* c);
+void connection_sweep(void);
 
 static inline int connection_disable_in(connection_t* c) {
     if (c->event.events & EVENTS_IN) {

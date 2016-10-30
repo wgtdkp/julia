@@ -24,6 +24,7 @@ int vector_resize(vector_t* vec, int new_size);
 void vector_clear(vector_t* vec);
 
 static inline void* vector_at(vector_t* vec, int i) {
+    if (i >= vec->size) return NULL;
     return (void*)((char*)vec->data + vec->width * i);
 }
 
