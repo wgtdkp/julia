@@ -835,19 +835,10 @@ int parse_header_accept(request_t* r) {
         }
         list_insert(accept_list, list_tail(accept_list), type_node);
     }
-/*
-    list_node_t* p = list_head(accept_list);
-    while (p != NULL) {
-        accept_type_t* ac = (accept_type_t*)&p->data;
-        print_string("type: %*s\n", &ac->type);
-        print_string("subtype: %*s\n", &ac->subtype);
-        printf("q: %f\n", ac->q);
-        p = p->next;
-    }
-*/
     return OK;
 }
 
+// TODO(wgtdkp):
 int parse_request_body_chunked(request_t* r) {
     assert(false);
     buffer_t* b = &r->rb;
@@ -857,7 +848,6 @@ int parse_request_body_chunked(request_t* r) {
             
         }
     }
-    
     return OK;
 }
 

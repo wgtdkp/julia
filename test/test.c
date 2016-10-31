@@ -6,6 +6,9 @@
 #include "base/pool.h"
 #include "base/queue.h"
 #include "base/vector.h"
+#include "base/heap.h"
+
+
 
 int arr[101];
 
@@ -47,8 +50,7 @@ int test_vector(void)
     return 0;
 }
 */
-int test_pool(void)
-{
+static int test_pool(void) {
     pool_t pool;
     pool_init(&pool, sizeof(int), 100, 0);
     
@@ -79,8 +81,7 @@ int test_pool(void)
 }
 
 
-int test_list(void)
-{
+static int test_list(void) {
     list_t list;
     pool_t pool;
     pool_init(&pool, LIST_WIDTH(int), 100, 0);
@@ -133,8 +134,7 @@ int test_list(void)
 
 
 
-int test_queue(void)
-{
+static int test_queue(void) {
     queue_t queue;
     pool_t pool;
     pool_init(&pool, QUEUE_WIDTH(int), 100, 0);
@@ -165,14 +165,50 @@ int test_queue(void)
     return 0;
 }
 
+static int heap_comp(void* lhs, void* rhs) {
+    return *(int*)lhs - *(int*)rhs;
+}
 
-int main(void)
-{
+static void print_heap(heap_t* h) {
+    for (int i = 1; i <= heap_size(h); ++i) {
+        int* v = heap_at(h, i);
+        printf("%d ", *v);
+    }
+    printf("\n");
+}
+
+static int test_heap(void) {
+    heap_t h;
+    heap_init(&h, heap_comp);
+    int arr[10] = {99, 23, 43, 45, 0, 9, 4, 8, 7, -1};
+    int idx[10];
+    for (int i = 0; i < 10; ++i) {
+        idx[i] = heap_push(&h, &arr[i]);
+    }
+
+    for (int i = 0; i < 10; ++i) {
+        int* v = heap_at(&h, idx[i]);
+        *v = 200 + i;
+        heap_shift_down(&h, idx[i]);
+        print_heap(&h);
+    }
+
+    for (int i = 0; i < 10; ++i) {
+        int* v = heap_pop(&h);
+        printf("%d\n", *v);
+    }
+
+    return 0;
+}
+
+
+int main(void) {
+    test_heap();
     //test_vector();
     //while (1)
     //    test_pool();
     //test_list();
-    while (1)
-        test_queue();
+    //while (1)
+    //    test_queue();
     return 0;
 }

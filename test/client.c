@@ -21,7 +21,7 @@
 #include <strings.h>
 #include <time.h>
 
-#define EXIT_ON(cond, msg) {    \
+#define ABORT_ON(cond, msg) {    \
     if (cond) {                 \
         perror(msg);            \
         abort();                \
@@ -33,22 +33,22 @@ int startup(uint16_t port)
 {
     static const char* host = "127.0.0.1";
     int fd = socket(AF_INET, SOCK_STREAM, 0);
-    EXIT_ON(fd == -1, "socket");
+    ABORT_ON(fd == -1, "socket");
 
     struct sockaddr_in addr;
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
     int success = inet_pton(AF_INET, host, &addr.sin_addr);
-    assert(success > 0);
+    ABORT_ON(success <= 0, "inet_pton");
 
     struct linger ling = {
         .l_onoff = 1,
         .l_linger = 10
     };
     int err = setsockopt(fd, SOL_SOCKET, SO_LINGER, &ling, sizeof(ling));
-    EXIT_ON(err != 0, "setsockopt");
+    ABORT_ON(err != 0, "setsockopt");
     err = connect(fd, (struct sockaddr*)&addr, sizeof(addr));
-    EXIT_ON(err != 0, "connect");
+    ABORT_ON(err != 0, "connect");
 
     return fd;
 }
