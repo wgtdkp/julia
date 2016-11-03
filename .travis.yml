@@ -1,8 +1,13 @@
 sudo: required
+
+dist: Xenial
+
 script:
   - sudo unlink /usr/bin/gcc && sudo ln -s /usr/bin/gcc-5 /usr/bin/gcc
   - gcc --version
-  - make && make install && make test
+  - git submodule update --init
+  - make
+
 addons:
   apt:
     sources:
