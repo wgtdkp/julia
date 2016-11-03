@@ -14,6 +14,8 @@ BIN_DIR = /usr/local/bin/
 OBJS_DIR = build/
 OBJS = $(addprefix $(OBJS_DIR), $(SRCS:.c=.o))
 
+default: all
+
 install: all uninstall
 	@sudo mkdir -p $(INSTALL_DIR)
 	@sudo cp config.json $(INSTALL_DIR)config.json
