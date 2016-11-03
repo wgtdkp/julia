@@ -16,7 +16,7 @@ A small yet high performance http server and reverse proxy. You may view it as a
 
 ### MAKE
 ```shell
-  $ git submodule update --init
+  $ git submodule update --remote --recursive
   $ make all
   $ make install # root required
 ```
