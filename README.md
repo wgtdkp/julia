@@ -2,7 +2,7 @@
 [nginx]: https://nginx.org/
 [lighttpd]: https://www.lighttpd.net/
 
-# julia
+# julia [![Build Status](https://travis-ci.org/wgtdkp/julia.svg?branch=master)](https://travis-ci.org/wgtdkp/julia)
 [中文](#中文)
 
 A small yet high performance http server and reverse proxy. You may view it as a _tiny nginx_.
