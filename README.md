@@ -32,14 +32,14 @@ As julia run as a daemon, it is not convenient to debug.
 Follow the steps:
 
 1. change the _INSTALL\_DIR_ in Makefile to your local repo, like:
-```shell
-INSTALL_DIR = /home/foo/julia/ # the last slash required
-```
+  ```shell
+  INSTALL_DIR = /home/foo/julia/ # the last slash required
+  ```
 
 2. turn on the _debug_ instruction in config.json
-```json
-"debug": true,
-```
+  ```json
+  "debug": true,
+  ```
 
 ### **EXICTING**
 **Making a http server and host your site is not extremely cool?**
