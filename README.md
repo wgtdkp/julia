@@ -35,6 +35,7 @@ Follow the steps:
 ```shell
 INSTALL_DIR = /home/foo/julia/ # the last slash required
 ```
+
 2. turn on the _debug_ instruction in config.json
 ```json
 "debug": true,
