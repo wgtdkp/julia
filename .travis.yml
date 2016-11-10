@@ -1,7 +1,8 @@
 sudo: required
 dist: Trusty
 script:
-  - sudo unlink /usr/bin/gcc && sudo ln -s /usr/bin/gcc-5 /usr/bin/gcc
+  - sudo unlink /usr/bin/gcc
+  - sudo ln -s /usr/bin/gcc-5 /usr/bin/gcc
   - gcc --version
   - git submodule update --remote --recursive
   - make
