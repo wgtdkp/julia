@@ -152,31 +152,6 @@ typedef struct {
 } response_headers_t;
 
 /*
- * Response
- */
-/*
-typedef struct {
-    int status;
-    int resource_fd;
-    int body_fd;
-    int body_len;
-    bool fetch_from_back;
-    struct back_connection* back_connection;
-    struct stat resource_stat;
-    response_headers_t headers;
-    // Connection must be closed after the response was sent.
-    // This happens when we accept a bad syntax request, and
-    // cannot recover from this status. Because we immediately
-    // discard the request and we thus cannot decide the end
-    // of the bad request or the beginning of next request.
-    bool keep_alive;
-    
-    //response_headers_t headers;
-    buffer_t buffer;
-} response_t;
-*/
-
-/*
  * Request
  */
 typedef enum {
@@ -263,12 +238,9 @@ typedef struct request {
     buffer_t sb;
     struct connection* c;
     struct connection* uc;
-    //typedef int (*request_handler_t)(struct request* r);
+
     int (*in_handler)(struct request* r);
     int (*out_handler)(struct request* r);
-    //request_handler_t* pass_handler;
-    //request_handler_t* fetch_handler;
-
     int status;
     int resource_fd;
     int resource_len;
