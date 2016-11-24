@@ -19,6 +19,7 @@ default: all
 install: all uninstall
 	@sudo mkdir -p $(INSTALL_DIR)
 	@sudo cp config.json $(INSTALL_DIR)config.json
+	@sudo cp julia.pid $(INSTALL_DIR)julia.pid
 	@sudo cp -a www/. /var/www/
 	@sudo cp $(OBJS_DIR)$(TARGET) $(BIN_DIR)$(TARGET)
 
