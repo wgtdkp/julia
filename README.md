@@ -41,7 +41,7 @@ Follow the steps:
   "debug": true,
   ```
 
-### **EXICTING**
+### **EXCITING**
 **Making a http server and host your site is not extremely cool?**
 
 **Then, what if your server is compiled by your own [compiler](https://github.com/wgtdkp/wgtcc)?**
