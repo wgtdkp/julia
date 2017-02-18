@@ -5,15 +5,13 @@
 #include <stdlib.h>
 #include <string.h>
 
-
 typedef struct {
     char* data;
     int len;
 } string_t;
 
-
+#define STRING_INIT(cstr)   {cstr, sizeof(cstr) - 1}
 #define STRING(cstr)    (string_t){cstr, sizeof(cstr) - 1}
-
 
 static const string_t string_null = {NULL, 0};
 

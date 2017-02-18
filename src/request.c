@@ -19,7 +19,7 @@ typedef struct {
 } header_nv_t;
 
 #define HEADER_PAIR(name, processor)    \
-    {STRING(#name), {offsetof(request_headers_t, name), processor}}
+    {STRING_INIT(#name), {offsetof(request_headers_t, name), processor}}
     
 static header_nv_t header_tb[] = {
     HEADER_PAIR(cache_control, header_handle_generic),

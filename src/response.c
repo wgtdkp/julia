@@ -225,17 +225,17 @@ static map_t mime_map = {
 };
 
 static string_t mime_tb [][2] = {
-    {STRING("htm"),     STRING("text/html")},
-    {STRING("html"),    STRING("text/html")},
-    {STRING("gif"),     STRING("image/gif")},
-    {STRING("ico"),     STRING("image/x-icon")},
-    {STRING("jpeg"),    STRING("image/jpeg")},
-    {STRING("jpg"),     STRING("image/jpeg")},
-    {STRING("png"),     STRING("image/png")},
-    {STRING("svg"),     STRING("image/svg+xml")},
-    {STRING("txt"),     STRING("text/plain")},
-    {STRING("zip"),     STRING("application/zip")},
-    {STRING("css"),     STRING("text/css")},
+    {STRING_INIT("htm"),    STRING_INIT("text/html")},
+    {STRING_INIT("html"),   STRING_INIT("text/html")},
+    {STRING_INIT("gif"),    STRING_INIT("image/gif")},
+    {STRING_INIT("ico"),    STRING_INIT("image/x-icon")},
+    {STRING_INIT("jpeg"),   STRING_INIT("image/jpeg")},
+    {STRING_INIT("jpg"),    STRING_INIT("image/jpeg")},
+    {STRING_INIT("png"),    STRING_INIT("image/png")},
+    {STRING_INIT("svg"),    STRING_INIT("image/svg+xml")},
+    {STRING_INIT("txt"),    STRING_INIT("text/plain")},
+    {STRING_INIT("zip"),    STRING_INIT("application/zip")},
+    {STRING_INIT("css"),    STRING_INIT("text/css")},
 };
 
 static char* err_page(int status, int* len);
