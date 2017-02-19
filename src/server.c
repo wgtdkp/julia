@@ -173,7 +173,7 @@ work:;
     assert(add_listener(&listen_fd) != ERROR);
 
 wait:;
-    int nfds = epoll_wait(epoll_fd, events, MAX_EVENT_NUM, 1);
+    int nfds = epoll_wait(epoll_fd, events, MAX_EVENT_NUM, 30);
     if (nfds == ERROR) {
         ABORT_ON(errno != EINTR, "epoll_wait");
     }

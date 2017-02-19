@@ -21,7 +21,7 @@
 #include <strings.h>
 #include <time.h>
 
-#define ABORT_ON(cond, msg) {    \
+#define ABORT_ON(cond, msg) {   \
     if (cond) {                 \
         perror(msg);            \
         abort();                \
