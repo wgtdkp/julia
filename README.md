@@ -65,7 +65,7 @@ have fun :)
 
 ## TODO
 
-1. fastcgi
+1. ~~fastcgi~~
 2. chunked transform
 3. benchmark
 
