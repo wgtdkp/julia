@@ -203,6 +203,7 @@ wait:;
     connection_sweep();
     goto wait;
 
+    close(epoll_fd);
     close(listen_fd);
     return OK;
 }
