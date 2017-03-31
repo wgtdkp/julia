@@ -18,13 +18,13 @@ int connection_comp(void* lhs, void* rhs) {
 
 connection_t* open_connection(int fd) {
     connection_t* c = pool_alloc(&connection_pool);
-    connection_register(c);
     c->active_time = time(NULL);
-
     c->fd = fd;
     c->side = C_SIDE_FRONT;
     c->r = pool_alloc(&request_pool);
     request_init(c->r, c);
+
+    connection_register(c);    
 
     set_nonblocking(c->fd);
     c->event.events = EVENTS_IN;
@@ -41,6 +41,7 @@ connection_t* open_connection(int fd) {
 }
 
 void close_connection(connection_t* c) {
+    connection_unregister(c);
     // The events automatically removed
     close(c->fd);
     if (c->side == C_SIDE_FRONT) {
@@ -52,7 +53,6 @@ void close_connection(connection_t* c) {
         c->r->uc = NULL;
         c->r->pass = false;
     }
-    connection_unregister(c);
     pool_free(&connection_pool, c);
 }
 
