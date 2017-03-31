@@ -272,7 +272,7 @@ int add_listener(int* listen_fd);
 int set_nonblocking(int fd);
 int connection_comp(void* lhs, void* rhs);
 void connection_active(connection_t* c);
-void connection_register(connection_t* c);
+int connection_register(connection_t* c);
 void connection_unregister(connection_t* c);
 void connection_sweep(void);
 

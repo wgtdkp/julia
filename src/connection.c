@@ -24,16 +24,15 @@ connection_t* open_connection(int fd) {
     c->r = pool_alloc(&request_pool);
     request_init(c->r, c);
 
-    connection_register(c);    
+    if (connection_register(c) < 0) {
+        close_connection(c);
+        return NULL;
+    }
 
     set_nonblocking(c->fd);
     c->event.events = EVENTS_IN;
     c->event.data.ptr = c;
     if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, c->fd, &c->event) == -1) {
-        close_connection(c);
-        return NULL;
-    }
-    if (heap_size > MAX_CONNECTION) {
         close_connection(c);
         return NULL;
     }
@@ -117,9 +116,13 @@ void connection_active(connection_t* c) {
     heap_shift_down(c->heap_idx);
 }
 
-void connection_register(connection_t* c) {
+// Return: 0, success; -1, fail;
+int connection_register(connection_t* c) {
+    if (heap_size + 1 > MAX_CONNECTION)
+      return -1;
     connections[++heap_size] = c;
     heap_shift_up(heap_size);
+    return 0;
 }
 
 void connection_unregister(connection_t* c) {
