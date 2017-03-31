@@ -189,27 +189,15 @@ wait:;
         
         int err;
         connection_t* c = events[i].data.ptr;
-        if (connection_is_expired(c))
-          continue;
-        if (events[i].events & EPOLLIN) {
+        if (!connection_is_expired(c) && events[i].events & EPOLLIN) {
             err = (c->side == C_SIDE_BACK) ?
                   handle_upstream(c): handle_request(c);
-            if (err == ERROR) {
-                close_connection(c);
-                bzero(&events[i], sizeof(events[i]));
-            } else {
-                connection_active(c);
-            }
+            err == ERROR ? connection_expire(c): connection_active(c);
         }
-        if (events[i].events & EPOLLOUT) {
+        if (!connection_is_expired(c) && events[i].events & EPOLLOUT) {
             err = (c->side == C_SIDE_BACK) ? 
                   handle_pass(c): handle_response(c);
-            if (err == ERROR) {
-                close_connection(c);
-                bzero(&events[i], sizeof(events[i]));
-            } else {
-                connection_active(c);
-            }
+            err == ERROR ? connection_expire(c): connection_active(c);
         }
     }
     connection_sweep();
