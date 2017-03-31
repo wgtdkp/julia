@@ -178,7 +178,7 @@ wait:;
         ABORT_ON(errno != EINTR, "epoll_wait");
     }
     
-    //TODO(wgtdkp): multithreading here: seperate fds to several threads
+    // TODO(wgtdkp): multithreading here: seperate fds to several threads
     for (int i = 0; i < nfds; ++i) {
         int fd = *((int*)(events[i].data.ptr));
         if (fd == listen_fd) {

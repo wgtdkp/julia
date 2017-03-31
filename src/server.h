@@ -42,7 +42,6 @@
 #include <sys/un.h>
 
 #define MAX_EVENT_NUM   (65536)
-#define MAX_CONNECTION  (10000)
 
 #define EVENTS_IN   (EPOLLIN)
 #define EVENTS_OUT  (EPOLLOUT)
@@ -270,8 +269,8 @@ connection_t* open_connection(int fd);
 void close_connection(connection_t* c);
 int add_listener(int* listen_fd);
 int set_nonblocking(int fd);
-int connection_comp(void* lhs, void* rhs);
 void connection_active(connection_t* c);
+void connection_expire(connection_t* c);
 int connection_register(connection_t* c);
 void connection_unregister(connection_t* c);
 void connection_sweep(void);

@@ -1,5 +1,7 @@
 #include "server.h"
 
+#define MAX_CONNECTION  (10000)
+
 int epoll_fd;
 julia_epoll_event_t events[MAX_EVENT_NUM];
 pool_t connection_pool;
@@ -8,13 +10,6 @@ pool_t accept_pool;
 
 static int heap_size = 0;
 static connection_t* connections[MAX_CONNECTION + 1] = {NULL};
-
-int connection_comp(void* lhs, void* rhs) {
-    connection_t* lhsc = lhs;
-    connection_t* rhsc = rhs;
-    return lhsc->active_time < rhsc->active_time ? -1:
-           lhsc->active_time > rhsc->active_time ? 1: 0;
-}
 
 connection_t* open_connection(int fd) {
     connection_t* c = pool_alloc(&connection_pool);
@@ -45,7 +40,10 @@ void close_connection(connection_t* c) {
     close(c->fd);
     if (c->side == C_SIDE_FRONT) {
         if (c->r->uc) {
-            close_connection(c->r->uc);
+            // We cannot close upstream connection here directly,
+            // as there could be unhandled events
+            // binded to upstream connection.
+            connection_expire(c->r->uc);
         }
         pool_free(&request_pool, c->r);
     } else {
@@ -114,6 +112,11 @@ static void heap_shift_down(int idx) {
 void connection_active(connection_t* c) {
     c->active_time = time(NULL);
     heap_shift_down(c->heap_idx);
+}
+
+void connection_expire(connection_t* c) {
+    c->active_time = time(NULL) - server_cfg.timeout - 1;
+    heap_shift_up(c->heap_idx);
 }
 
 // Return: 0, success; -1, fail;
