@@ -40,3 +40,7 @@
 www
 libfcgi
 build/
+
+# julia
+julia.log
+my_blog.ini
