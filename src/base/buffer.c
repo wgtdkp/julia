@@ -12,7 +12,7 @@
 
 /*
  * Return:
- *  OK: received all data, fd closed by peer
+ *  OK: received all data, connection closed by peer
  *  AGAIN: the buffer has no enough space for incoming data
  *  ERROR: error occurred
  */

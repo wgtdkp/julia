@@ -266,7 +266,7 @@ int handle_request(connection_t* c) {
     buffer_t* b = &r->rb;
     int err = buffer_recv(b, c->fd);
     if (err != AGAIN) {
-        // Client closed the connection or error occcurred
+        // Client closed the connection or error occurred
         return ERROR;
     }
     
