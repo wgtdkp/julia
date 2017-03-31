@@ -119,6 +119,10 @@ void connection_expire(connection_t* c) {
     heap_shift_up(c->heap_idx);
 }
 
+bool connection_is_expired(connection_t* c) {
+  return c->active_time + server_cfg.timeout < time(NULL);
+}
+
 // Return: 0, success; -1, fail;
 int connection_register(connection_t* c) {
     if (heap_size + 1 > MAX_CONNECTION)

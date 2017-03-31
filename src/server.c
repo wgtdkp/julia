@@ -186,8 +186,11 @@ wait:;
             accept_connection(listen_fd);
             continue;
         }
+        
         int err;
         connection_t* c = events[i].data.ptr;
+        if (connection_is_expired(c))
+          continue;
         if (events[i].events & EPOLLIN) {
             err = (c->side == C_SIDE_BACK) ?
                   handle_upstream(c): handle_request(c);
@@ -198,7 +201,6 @@ wait:;
                 connection_active(c);
             }
         }
-        
         if (events[i].events & EPOLLOUT) {
             err = (c->side == C_SIDE_BACK) ? 
                   handle_pass(c): handle_response(c);
