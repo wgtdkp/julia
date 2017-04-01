@@ -232,7 +232,6 @@ typedef struct request {
     int content_length;
     int body_received;
     
-    bool pass;
     buffer_t rb;
     buffer_t sb;
     struct connection* c;
@@ -266,10 +265,11 @@ typedef struct connection {
 #define HTTP_1_0    (version_t){1, 0}
 
 connection_t* open_connection(int fd);
+connection_t* uwsgi_open_connection(request_t* r, location_t* loc);
 void close_connection(connection_t* c);
 int add_listener(int* listen_fd);
 int set_nonblocking(int fd);
-void connection_active(connection_t* c);
+void connection_activate(connection_t* c);
 void connection_expire(connection_t* c);
 bool connection_is_expired(connection_t* c);
 int connection_register(connection_t* c);
@@ -399,6 +399,6 @@ void parse_header_host(request_t* request);
  * uWSGI
  */
 //int uwsgi_start_request(connection_t* c);
-int uwsgi_open_connection(request_t* r, location_t* loc);
+//int uwsgi_open_connection(request_t* r, location_t* loc);
 
 #endif

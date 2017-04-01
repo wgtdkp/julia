@@ -119,15 +119,12 @@ void request_init(request_t* r, connection_t* c) {
     r->content_length = -1;
     r->body_received = 0;
     
-    r->pass = false;
     buffer_init(&r->rb);
     buffer_init(&r->sb);
     r->c = c;
     r->uc = NULL;
     r->in_handler = request_handle_request_line;
     r->out_handler = send_response_buffer;
-    //r->pass_handler = NULL;
-    //r->fetch_handler = NULL;
 
     r->status = 200;
     r->resource_fd = -1;
@@ -175,7 +172,7 @@ int handle_pass(connection_t* uc) {
  * The upstream connection is closed every response finished
  * Return:
  *  OK, ERROR: the upstream connection must be closed
- *  AGAIN: 
+ *  AGAIN:
  */
 int handle_upstream(connection_t* uc) {
     request_t* r = uc->r;
@@ -201,11 +198,7 @@ int send_response_buffer(request_t* r) {
     int err = buffer_send(b, c->fd);
     if (err == OK) {
         buffer_clear(b);
-        if (r->pass) {
-            if (r->uc == NULL) {
-                r->response_done = true;
-                return OK;           
-            }
+        if (r->uc) {
             return AGAIN;
         } else if (r->resource_fd != -1) {
             r->out_handler = send_response_file;
@@ -222,7 +215,7 @@ int send_response_buffer(request_t* r) {
 
 int send_response_file(request_t* r) {
     connection_t* c = r->c;
-    assert(!r->pass);
+    assert(!r->uc);
     int fd = c->fd;
     while (1) {
         int len = sendfile(fd, r->resource_fd, NULL, r->resource_len);
@@ -300,11 +293,8 @@ static int request_handle_uri(request_t* r) {
     if (loc == NULL) {
         return response_build_err(r, 404);
     }
-    r->pass = loc->pass;
-    if (r->pass) {
-        int fd = uwsgi_open_connection(r, loc);
-        if (fd == -1) {
-            r->pass = false;
+    if (loc->pass) {
+        if (!(r->uc = uwsgi_open_connection(r, loc))) {
             return response_build_err(r, 503);
         }
         return OK;
@@ -393,9 +383,6 @@ static int request_handle_headers(request_t* r) {
     }
     
 done:
-    //if (r->pass) {
-    //    uwsgi_open_connection();
-    //}
     r->in_handler = request_handle_body;
     return OK;
 }
@@ -484,7 +471,7 @@ static int request_handle_body(request_t* r) {
     case OK:
         // Do not allow pipelining
         connection_disable_in(r->c);
-        if (!r->pass) {
+        if (!r->uc) {
             response_build(r);
             buffer_clear(b);
             connection_enable_out(r->c);            

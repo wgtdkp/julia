@@ -19,7 +19,43 @@ connection_t* open_connection(int fd) {
     c->r = pool_alloc(&request_pool);
     request_init(c->r, c);
 
-    if (connection_register(c) < 0) {
+    if (connection_register(c) == -1) {
+        close_connection(c);
+        return NULL;
+    }
+
+    set_nonblocking(c->fd);
+    c->event.events = EVENTS_IN;
+    c->event.data.ptr = c;
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, c->fd, &c->event) == -1) {
+        close_connection(c);
+        return NULL;
+    }
+    return c;
+}
+
+connection_t* uwsgi_open_connection(request_t* r, location_t* loc) {
+    assert(loc->pass);
+
+    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    ERR_ON(fd == -1, "socket");
+
+    struct sockaddr_in addr;
+    bzero(&addr, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(loc->port);
+    if (inet_pton(AF_INET, loc->host.data, &addr.sin_addr) <= 0)
+        return NULL;
+    if (connect(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0)
+        return NULL;
+    
+    connection_t* c = pool_alloc(&connection_pool);
+    c->active_time = time(NULL);
+    c->fd = fd;
+    c->side = C_SIDE_BACK;
+    c->r = r;
+
+    if (connection_register(c) == -1) {
         close_connection(c);
         return NULL;
     }
@@ -40,15 +76,11 @@ void close_connection(connection_t* c) {
     close(c->fd);
     if (c->side == C_SIDE_FRONT) {
         if (c->r->uc) {
-            // We cannot close upstream connection here directly,
-            // as there could be unhandled events
-            // binded to upstream connection.
-            connection_expire(c->r->uc);
+            close_connection(c->r->uc);
         }
         pool_free(&request_pool, c->r);
     } else {
         c->r->uc = NULL;
-        c->r->pass = false;
     }
     pool_free(&connection_pool, c);
 }
@@ -109,14 +141,18 @@ static void heap_shift_down(int idx) {
     connections[k]->heap_idx = k;    
 }
 
-void connection_active(connection_t* c) {
+void connection_activate(connection_t* c) {
     c->active_time = time(NULL);
     heap_shift_down(c->heap_idx);
+    if (c->side == C_SIDE_FRONT && c->r->uc)
+        connection_activate(c->r->uc);
 }
 
 void connection_expire(connection_t* c) {
     c->active_time = time(NULL) - server_cfg.timeout - 1;
     heap_shift_up(c->heap_idx);
+    if (c->side == C_SIDE_FRONT && c->r->uc)
+        connection_expire(c->r->uc);
 }
 
 bool connection_is_expired(connection_t* c) {

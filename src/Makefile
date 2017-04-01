@@ -1,11 +1,11 @@
 TARGET = julia
-CC = gcc -std=c11 -O2
+CC = gcc -std=c11
 SRCS = base/buffer.c base/list.c		\
 	   base/map.c base/pool.c			\
 	   base/string.c base/vector.c		\
 	   config.c connection.c parse.c	\
        request.c response.c server.c	\
-	   util.c uwsgi.c
+	   util.c
 
 INSTALL_DIR = /usr/local/$(TARGET)/
 
