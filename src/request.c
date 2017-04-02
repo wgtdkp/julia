@@ -23,7 +23,7 @@ typedef struct {
     
 static header_nv_t header_tb[] = {
     HEADER_PAIR(cache_control, header_handle_generic),
-    HEADER_PAIR(c, header_handle_connection),
+    HEADER_PAIR(connection, header_handle_connection),
     HEADER_PAIR(date, header_handle_generic),
     HEADER_PAIR(pragma, header_handle_generic),
     HEADER_PAIR(trailer, header_handle_generic),
