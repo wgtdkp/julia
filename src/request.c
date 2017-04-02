@@ -392,7 +392,7 @@ done:
 static int header_handle_connection(request_t* r, int offset) {
     header_handle_generic(r, offset);
     request_headers_t* headers = &r->headers;
-    if(strncasecmp("close", headers->c.data, 5) == 0)
+    if(strncasecmp("close", headers->connection.data, 5) == 0)
         r->keep_alive = false;
     return OK;
 }
