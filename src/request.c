@@ -471,13 +471,14 @@ static int request_handle_body(request_t* r) {
         connection_enable_out(r->uc);
         return AGAIN;
     case OK:
-        // Do not allow pipelining
+        // Do not support pipelining
         connection_disable_in(r->c);
         if (!r->uc) {
             response_build(r);
             buffer_clear(b);
             connection_enable_out(r->c);            
         } else {
+            // If there is successor request, it will be discarded.
             b->begin = b->data;
             connection_enable_out(r->uc);
         }
