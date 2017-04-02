@@ -153,6 +153,8 @@ void connection_expire(connection_t* c) {
     heap_shift_up(c->heap_idx);
     if (c->side == C_SIDE_FRONT && c->r->uc)
         connection_expire(c->r->uc);
+    else if (c->side == C_SIDE_BACK)
+        c->r->uc = NULL;
 }
 
 bool connection_is_expired(connection_t* c) {

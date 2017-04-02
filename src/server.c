@@ -195,7 +195,7 @@ wait:;
             err == ERROR ? connection_expire(c): connection_activate(c);
         }
         if (!connection_is_expired(c) && events[i].events & EPOLLOUT) {
-            err = (c->side == C_SIDE_BACK) ? 
+            err = (c->side == C_SIDE_BACK) ?
                   handle_pass(c): handle_response(c);
             err == ERROR ? connection_expire(c): connection_activate(c);
         }
