@@ -178,6 +178,8 @@ int handle_upstream(connection_t* uc) {
     request_t* r = uc->r;
     buffer_t* b = &r->sb;
     int err = buffer_recv(b, uc->fd);
+
+    connection_enable_out(r->c);
     if (err == OK) {
         // The connection has been closed by peer
         return ERROR;
@@ -188,7 +190,7 @@ int handle_upstream(connection_t* uc) {
     } else if (buffer_full(b)) {
         //connection_disable_in(uc);
     }
-    connection_enable_out(r->c);
+    
     return err;
 }
 
