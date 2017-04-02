@@ -94,7 +94,7 @@ extern pool_t accept_pool;
 #define COMMON_HEADERS              \
     /* General headers */           \
     string_t cache_control;         \
-    string_t c;            \
+    string_t connection;            \
     string_t date;                  \
     string_t pragma;                \
     string_t trailer;               \
