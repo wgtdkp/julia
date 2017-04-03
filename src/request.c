@@ -160,7 +160,6 @@ void request_release(request_t* r) {
  *  ERROR: error occurred, the upstream connection must be closed
  */
 int handle_pass(connection_t* uc) {
-    ju_log("call handle_pass");
     request_t* r = uc->r;
     buffer_t* b = &r->rb;
     int err = buffer_send(b, uc->fd);
@@ -189,7 +188,6 @@ int handle_pass(connection_t* uc) {
  *  AGAIN:
  */
 int handle_upstream(connection_t* uc) {
-    ju_log("call handle_upstream");
     request_t* r = uc->r;
     buffer_t* b = &r->sb;
     int err = buffer_recv(b, uc->fd);
@@ -254,7 +252,6 @@ int send_response_file(request_t* r) {
 
 //static int cnt = 0;
 int handle_response(connection_t* c) {
-    ju_log("call handle_response");
     request_t* r = c->r;
     int err;
     do {
@@ -273,7 +270,6 @@ int handle_response(connection_t* c) {
 }
 
 int handle_request(connection_t* c) {
-    ju_log("call handle_request");
     request_t* r = c->r;
     buffer_t* b = &r->rb;
     int err = buffer_recv(b, c->fd);
