@@ -164,14 +164,6 @@ typedef enum {
     M_TRACE,
 } method_t;
 
-typedef enum {
-    RS_REQUEST_LINE,
-    RS_HEADERS,
-    RS_BODY,
-    RS_PASS_HEADERS,
-    RS_PASS_BODY,
-} request_stage_t;
-
 // Tranfer coding
 typedef enum {
     TE_IDENTITY,
@@ -206,6 +198,7 @@ typedef struct {
 
 
 typedef struct request {
+    // Request
     method_t method;
     version_t version;
     request_headers_t headers;
@@ -220,28 +213,29 @@ typedef struct request {
     string_t host;
     uint16_t port;
 
-    request_stage_t stage;
-    
     uint8_t discard_body: 1;
     uint8_t body_done: 1;
-    uint8_t done: 1;
-    uint8_t response_done: 1;
-    uint8_t keep_alive: 1;
 
     transfer_encoding_t t_encoding;
     int content_length;
     int body_received;
     
     buffer_t rb;
-    buffer_t sb;
-    struct connection* c;
-    struct connection* uc;
-
     int (*in_handler)(struct request* r);
+    
+    // Response
+    buffer_t sb;
     int (*out_handler)(struct request* r);
     int status;
     int resource_fd;
     int resource_len;
+
+    uint8_t response_done: 1;
+    uint8_t keep_alive: 1;
+
+    // Connections
+    struct connection* c;
+    struct connection* uc;
 } request_t;
 
 /*

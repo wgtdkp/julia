@@ -91,14 +91,16 @@ static inline void uri_init(uri_t* uri) {
 /*
  * Request
  */
-void request_init(request_t* r, connection_t* c) {
+
+static void request_reuse(request_t* r) {
+    // Request
     r->method = M_GET;    // Any value is ok
     r->version.major = 0;
     r->version.minor = 0;
 
     memset(&r->headers, 0, sizeof(r->headers));
     list_init(&r->accepts, &accept_pool);
-    
+
     r->state = RL_S_BEGIN;
     string_init(&r->request_line);
     string_init(&r->header_name);
@@ -106,29 +108,35 @@ void request_init(request_t* r, connection_t* c) {
     uri_init(&r->uri);
     string_init(&r->host);
     r->port = 80;
-    
-    r->stage = RS_REQUEST_LINE;
-     
+
     r->discard_body = false;
     r->body_done = false;
-    r->done = false;
-    r->response_done = false;
-    r->keep_alive = false;
 
     r->t_encoding = TE_IDENTITY;
-    r->content_length = -1;
+    r->content_length = -1; // content-length not specified
     r->body_received = 0;
+}
+
+void request_init(request_t* r, connection_t* c) {
+    // Request
+    request_reuse(r);
     
+    // Response
     buffer_init(&r->rb);
-    buffer_init(&r->sb);
-    r->c = c;
-    r->uc = NULL;
     r->in_handler = request_handle_request_line;
+
+    buffer_init(&r->sb);
     r->out_handler = send_response_buffer;
 
     r->status = 200;
     r->resource_fd = -1;
     r->resource_len = 0;
+    r->response_done = false;
+    r->keep_alive = false;
+
+    // Connections
+    r->c = c;
+    r->uc = NULL;
 }
 
 void request_clear(request_t* r) {
@@ -152,6 +160,7 @@ void request_release(request_t* r) {
  *  ERROR: error occurred, the upstream connection must be closed
  */
 int handle_pass(connection_t* uc) {
+    ju_log("call handle_pass");
     request_t* r = uc->r;
     buffer_t* b = &r->rb;
     int err = buffer_send(b, uc->fd);
@@ -159,7 +168,12 @@ int handle_pass(connection_t* uc) {
         // Remove the EPOLLOUT event of upstream side
         // Done send all data
         buffer_clear(b);
-        connection_enable_in(r->c);
+        // If current request body is not completely received,
+        // keep receiving it and pass to backend. Through we
+        // get response from backend directly and 'c->r' is now
+        // free for handling next request.
+        if (!r->body_done)
+            connection_enable_in(r->c);
         connection_disable_out(uc);
     } else if (err == ERROR) {
         // The connection has been closed by peer
@@ -175,6 +189,7 @@ int handle_pass(connection_t* uc) {
  *  AGAIN:
  */
 int handle_upstream(connection_t* uc) {
+    ju_log("call handle_upstream");
     request_t* r = uc->r;
     buffer_t* b = &r->sb;
     int err = buffer_recv(b, uc->fd);
@@ -239,6 +254,7 @@ int send_response_file(request_t* r) {
 
 //static int cnt = 0;
 int handle_response(connection_t* c) {
+    ju_log("call handle_response");
     request_t* r = c->r;
     int err;
     do {
@@ -257,6 +273,7 @@ int handle_response(connection_t* c) {
 }
 
 int handle_request(connection_t* c) {
+    ju_log("call handle_request");
     request_t* r = c->r;
     buffer_t* b = &r->rb;
     int err = buffer_recv(b, c->fd);
@@ -479,11 +496,11 @@ static int request_handle_body(request_t* r) {
             connection_enable_out(r->c);            
         } else {
             // If there is successor request, it will be discarded.
+            b->end = b->begin;
             b->begin = b->data;
             connection_enable_out(r->uc);
         }
         r->body_done = true;
-        r->in_handler = request_handle_request_line;
         return OK;
     default:
         return response_build_err(r, 400);

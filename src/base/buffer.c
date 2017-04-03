@@ -48,9 +48,6 @@ int buffer_send(buffer_t* buffer, int fd) {
         if (len == -1) {
             if (errno == EAGAIN)
                 return AGAIN;
-            else if (errno == EPIPE) {
-                // TODO(wgtdkp): the connection is broken
-            }
             perror("send");
             return ERROR;
         }

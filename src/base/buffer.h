@@ -12,8 +12,8 @@
 #define BUF_SIZE   (2 * 1024)
 
 typedef struct {
-    char* begin;
-    char* end;
+    char* begin; // inclusive
+    char* end; // exclusive
     char* limit;
     char data[BUF_SIZE + 1];
 } buffer_t;

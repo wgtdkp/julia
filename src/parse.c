@@ -860,8 +860,11 @@ int parse_request_body_identity(request_t* r) {
     // Error here
     r->body_received += buffer_size(b);
     if (r->body_received >= r->content_length) {
+        // Consume the body
+        b->begin += buffer_size(b) - (r->body_received - r->content_length);
         return OK;
     }
-    
+    // Consume the body
+    b->begin += buffer_size(b);
     return AGAIN;
 }
