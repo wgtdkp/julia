@@ -131,7 +131,7 @@ int parse_request_line(request_t* r) {
             case '\n':
                 return ERR_INVALID_REQUEST;
             case ' ':
-                r->state = RL_S_SP_BEFROE_VERSION;
+                r->state = RL_S_SP_BEFORE_VERSION;
                 // Fall through
             default: 
                 if ((uri_err = parse_uri(&r->uri, p)) != OK)
@@ -145,7 +145,7 @@ int parse_request_line(request_t* r) {
             }
             break;
 
-        case RL_S_SP_BEFROE_VERSION:
+        case RL_S_SP_BEFORE_VERSION:
             switch (ch) {
             case ' ':
                 break;
@@ -193,8 +193,7 @@ int parse_request_line(request_t* r) {
         case RL_S_HTTP_VERSION_MAJOR:
             switch (ch) {
             case '0' ... '9':
-                r->version.major =
-                        r->version.major * 10 + ch - '0';
+                r->version.major = r->version.major * 10 + ch - '0';
                 PARSE_ERR_ON(r->version.major > 999, ERR_INVALID_VERSION);
                 break;
             case '.':
