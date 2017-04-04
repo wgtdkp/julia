@@ -170,7 +170,6 @@ int handle_pass(connection_t* uc) {
         if (r->body_received > r->content_length) {
             int rl = r->body_received - r->content_length;
             // restore
-            printf("[DEBUG] restore buffer! length is %d.\n", rl);
             memmove(b->data, temp_end, rl);
             b->begin = b->data;
             b->end = b->data + rl;
@@ -220,7 +219,6 @@ int handle_upstream(connection_t* uc) {
 int send_response_buffer(request_t* r) {
     connection_t* c= r->c;
     buffer_t* b = &r->sb;
-    printf("[DEBUG] send_response_buffer: %d\n", buffer_size(b));
     int err = buffer_send(b, c->fd);
     if (err == OK) {
         buffer_clear(b);
@@ -277,7 +275,6 @@ int handle_response(connection_t* c) {
             if (r->body_received > r->content_length) {
                 buffer_t *b = &r->rb;
                 ABORT_ON(buffer_size(b) <= 0, "buffer miss!");
-                printf("[DEBUG] detect non-empty buffer, length is %d.\n", buffer_size(b));
                 // save buffer (trick)
                 char *temp_begin = b->begin, *temp_end = b->end;
                 request_clear(r);
@@ -287,7 +284,6 @@ int handle_response(connection_t* c) {
                 do {
                     err = r->in_handler(r);
                 } while (err == OK && !r->body_done);
-                printf("[DEBUG] handle pipelining request, err is %d\n", err);
                 return err;
             }
 
@@ -530,7 +526,6 @@ static int request_handle_body(request_t* r) {
             // If pipelining request in the buffer, save it
             if (r->body_received > r->content_length) {
                 int rl = r->body_received - r->content_length;
-                printf("[DEBUG] pipelinling request in the buffer! length is %d.\n", rl);
                 // send precisely
                 b->end = b->end - rl;
             }

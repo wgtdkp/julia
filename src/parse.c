@@ -855,7 +855,6 @@ int parse_request_body_identity(request_t* r) {
     buffer_t* b = &r->rb;
     // use body_received to detect pipelining
     r->body_received += buffer_size(b);
-    printf("[DEBUG] body received: %d\n", r->body_received);
 
     if (r->body_received >= r->content_length) {
         return OK;

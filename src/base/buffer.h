@@ -14,14 +14,13 @@
 typedef struct {
     char* begin; // inclusive
     char* end; // exclusive
-    char* limit;
-    char data[BUF_SIZE + 1];
+    char data[BUF_SIZE];
+    char limit[1];
 } buffer_t;
 
 static inline void buffer_init(buffer_t* buffer) {
     buffer->begin = buffer->data;
     buffer->end = buffer->data;
-    buffer->limit = buffer->data + BUF_SIZE;
 }
 
 static inline void buffer_clear(buffer_t* buffer) {
