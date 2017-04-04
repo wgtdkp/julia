@@ -9,7 +9,6 @@
 #include <unistd.h>
 #include <sys/socket.h>
 
-
 /*
  * Return:
  *  OK: received all data, connection closed by peer
