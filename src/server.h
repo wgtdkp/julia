@@ -340,7 +340,7 @@ enum {
     RL_S_METHOD,
     RL_S_SP_BEFORE_URI,
     RL_S_URI,
-    RL_S_SP_BEFROE_VERSION,
+    RL_S_SP_BEFORE_VERSION,
     RL_S_HTTP_H,
     RL_S_HTTP_HT,
     RL_S_HTTP_HTT,
