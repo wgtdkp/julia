@@ -113,7 +113,7 @@ static void request_reuse(request_t* r) {
     r->body_done = false;
 
     r->t_encoding = TE_IDENTITY;
-    r->content_length = -1; // content-length not specified
+    r->content_length = 0; // default to 0 make things easier
     r->body_received = 0;
 }
 
@@ -140,10 +140,8 @@ void request_init(request_t* r, connection_t* c) {
 }
 
 void request_clear(request_t* r) {
-    connection_t* c = r->c;
     connection_t* uc = r->uc;
-    request_init(r, c);
-    r->c = c;
+    request_init(r, r->c);
     r->uc = uc;
 }
 
@@ -162,11 +160,22 @@ void request_release(request_t* r) {
 int handle_pass(connection_t* uc) {
     request_t* r = uc->r;
     buffer_t* b = &r->rb;
+    // because `buffer_send` may call `buffer_clear`, so we save end pointer(trickly)
+    char *temp_end = b->end;
     int err = buffer_send(b, uc->fd);
     if (err == OK) {
         // Remove the EPOLLOUT event of upstream side
         // Done send all data
-        buffer_clear(b);
+
+        if (r->body_received > r->content_length) {
+            int rl = r->body_received - r->content_length;
+            // restore
+            memmove(b->data, temp_end, rl);
+            b->begin = b->data;
+            b->end = b->data + rl;
+        }
+        else 
+            buffer_clear(b);
         // If current request body is not completely received,
         // keep receiving it and pass to backend. Through we
         // get response from backend directly and 'c->r' is now
@@ -259,9 +268,26 @@ int handle_response(connection_t* c) {
     } while (err == OK && !r->response_done);
     if (r->response_done) {
         if (r->keep_alive) {
-            connection_disable_out(c);        
+            connection_disable_out(c);
             connection_enable_in(c);
-            request_clear(r);            
+            
+            // only check pipelining when the keep-alive(Is it right?)
+            if (r->body_received > r->content_length) {
+                buffer_t *b = &r->rb;
+                ABORT_ON(buffer_size(b) <= 0, "buffer miss!");
+                // save buffer (trick)
+                char *temp_begin = b->begin, *temp_end = b->end;
+                request_clear(r);
+                b->begin = temp_begin;
+                b->end = temp_end;
+                // handle request without recv new content
+                do {
+                    err = r->in_handler(r);
+                } while (err == OK && !r->body_done);
+                return err;
+            }
+
+            request_clear(r);
         } else {
             return ERROR;
         }
@@ -407,6 +433,8 @@ static int header_handle_connection(request_t* r, int offset) {
     request_headers_t* headers = &r->headers;
     if(strncasecmp("close", headers->connection.data, 5) == 0)
         r->keep_alive = false;
+    else if(strncasecmp("keep-alive", headers->connection.data, 10) == 0)
+        r->keep_alive = true;
     return OK;
 }
 
@@ -484,15 +512,23 @@ static int request_handle_body(request_t* r) {
         connection_enable_out(r->uc);
         return AGAIN;
     case OK:
-        // Do not support pipelining
+        // Delay the pipelining
         connection_disable_in(r->c);
         if (!r->uc) {
             response_build(r);
-            buffer_clear(b);
+            // save pipelining request if any
+            int rl = r->body_received - r->content_length;
+            memmove(b->data, b->end - rl, rl);
+            b->begin = b->data;
+            b->end = b->data + rl;
             connection_enable_out(r->c);            
         } else {
-            // If there is successor request, it will be discarded.
-            b->end = b->begin;
+            // If pipelining request in the buffer, save it
+            if (r->body_received > r->content_length) {
+                int rl = r->body_received - r->content_length;
+                // send precisely
+                b->end = b->end - rl;
+            }
             b->begin = b->data;
             connection_enable_out(r->uc);
         }

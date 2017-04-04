@@ -852,19 +852,12 @@ int parse_request_body_chunked(request_t* r) {
 }
 
 int parse_request_body_identity(request_t* r) {
-    buffer_t* b = &r->rb;    
-    if (r->content_length <= 0) {
-        return OK;
-    }
-
-    // Error here
+    buffer_t* b = &r->rb;
+    // use body_received to detect pipelining
     r->body_received += buffer_size(b);
+
     if (r->body_received >= r->content_length) {
-        // Consume the body
-        b->begin += buffer_size(b) - (r->body_received - r->content_length);
         return OK;
     }
-    // Consume the body
-    b->begin += buffer_size(b);
     return AGAIN;
 }
