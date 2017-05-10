@@ -405,8 +405,13 @@ done:
 static int header_handle_connection(request_t* r, int offset) {
     header_handle_generic(r, offset);
     request_headers_t* headers = &r->headers;
-    if(strncasecmp("close", headers->connection.data, 5) == 0)
+    if(strncasecmp("keep-alive", headers->connection.data, 10) == 0) {
+      r->keep_alive = true;
+    } else if(strncasecmp("close", headers->connection.data, 5) == 0) {
         r->keep_alive = false;
+    } else {
+      return response_build_err(r, 400);
+    }
     return OK;
 }
 

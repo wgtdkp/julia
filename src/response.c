@@ -309,6 +309,11 @@ int response_build(request_t* r) {
     if (slot) {
         content_type = slot->val.mime;
     }
+    if (r->keep_alive) {
+      buffer_append_cstring(b, "Connection: keep-alive" CRLF);
+    } else {
+      buffer_append_cstring(b, "Connection: close" CRLF);
+    }
     buffer_append_cstring(b, "Content-Type: ");
     buffer_append_string(b, &content_type);
     buffer_append_cstring(b, CRLF);
