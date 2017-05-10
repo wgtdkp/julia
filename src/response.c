@@ -313,8 +313,7 @@ int response_build(request_t* r) {
     buffer_append_string(b, &content_type);
     buffer_append_cstring(b, CRLF);
     
-    buffer_print(b, "Content-Length: %d" CRLF,
-                 r->resource_len);
+    buffer_print(b, "Content-Length: %d" CRLF, r->resource_len);
     
     buffer_append_cstring(b, CRLF);
     return OK;
