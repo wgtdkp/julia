@@ -12,7 +12,8 @@ static int heap_size = 0;
 static connection_t* connections[MAX_CONNECTION + 1] = {NULL};
 
 connection_t* open_connection(int fd) {
-    int on = 1;
+    // Disable Nagle algorithm
+    nt on = 1;
     setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &on, sizeof(on));
 
     connection_t* c = pool_alloc(&connection_pool);
