@@ -13,7 +13,6 @@ typedef struct {
 } chunk_t;
 
 typedef struct {
-    /* Number of objects per chunk */
     int width;
     int chunk_size;
     int nallocated;
@@ -21,7 +20,6 @@ typedef struct {
     vector_t chunks;
 } pool_t;
 
-int chunk_init(chunk_t* chunk, int width, int size);
 int pool_init(pool_t* pool, int width, int chunk_size, int nchunks);
 void* pool_alloc(pool_t* pool);
 void pool_clear(pool_t* pool);
