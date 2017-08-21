@@ -53,7 +53,7 @@ Follow the steps:
 **Making a http server and host your site is not extremely cool?**
 **Then, what if your server is compiled by your own [compiler](https://github.com/wgtdkp/wgtcc)?**
 
-Yes, i wrote a C11 compiler(let me call it [wgtcc](https://github.com/wgtdkp/wgtcc)). It compiles **julia**, and the site runs well. :) You can install [wgtcc](https://github.com/wgtdkp/wgtcc), then compile **julia**:
+Yes, i wrote a C11 compiler(let me call it [wgtcc](https://github.com/wgtdkp/wgtcc)). It compiles **julia**, and the site runs well :) You can install [wgtcc](https://github.com/wgtdkp/wgtcc), then compile **julia**:
 
 ```shell
   $ make CC=wgtcc all
