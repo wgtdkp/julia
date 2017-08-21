@@ -36,7 +36,7 @@ You may modify the config file to specify the port if there is a confliction.
 ## Debug
 
 As julia run as a daemon, it is not convenient to debug.
-Follow the steps:
+Follow the steps to make it run in debug mode:
 
 1. change the _INSTALL\_DIR_ in Makefile to your local repo, like:
   ```shell
