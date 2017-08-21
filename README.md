@@ -8,16 +8,16 @@
 
 A small yet high performance http server and reverse proxy. You may view it as a _tiny nginx_.
 
-## ENVIRONMENT
+## Environment
 
 * gcc 5.4.0
 * linux 4.4.0
 
-## DEPENDENCY
+## Dependency
 
 * _[juson]_
 
-## INSTALL
+## Install
 
 ```shell
   $ git submodule update --remote --recursive
@@ -25,7 +25,7 @@ A small yet high performance http server and reverse proxy. You may view it as a
   $ make install # root required
 ```
 
-## RUN
+## Run
 
 ```shell
 $ julia # roo required, default listening at 8000
@@ -33,7 +33,7 @@ $ julia # roo required, default listening at 8000
 
 You may modify the config file to specify the port if there is a confliction.
 
-## DEBUG
+## Debug
 
 As julia run as a daemon, it is not convenient to debug.
 Follow the steps:
@@ -48,7 +48,7 @@ Follow the steps:
   "debug": true,
   ```
 
-## **EXCITING**
+## **Exciting**
 
 **Making a http server and host your site is not extremely cool?**
 **Then, what if your server is compiled by your own [compiler](https://github.com/wgtdkp/wgtcc)?**
@@ -63,13 +63,13 @@ It surprised me that the server compiled by **wgtcc** runs extremely fast!
 
 have fun :)
 
-## TODO
+## Todo
 
 1. ~~fastcgi~~
 2. chunked transform
 3. benchmark
 
-## REFERENCE
+## Reference
 
 1. _[nginx]_
 2. _[lighttpd]_
