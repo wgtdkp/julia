@@ -19,11 +19,13 @@ int buffer_recv(buffer_t* buffer, int fd) {
     while (!buffer_full(buffer)) {
         int margin = buffer->limit - buffer->end;
         int len = recv(fd, buffer->end, margin, 0);
-        if (len == 0) // EOF
+        if (len == 0) { // EOF
             return OK;
+        }
         if (len == -1) {
-            if (errno == EAGAIN)
+            if (errno == EAGAIN) {
                 return AGAIN;
+            }
             perror("recv");
             return ERROR;
         }
@@ -45,8 +47,9 @@ int buffer_send(buffer_t* buffer, int fd) {
     while (buffer_size(buffer) > 0) {
         int len = send(fd, buffer->begin, buffer_size(buffer), 0);
         if (len == -1) {
-            if (errno == EAGAIN)
+            if (errno == EAGAIN) {
                 return AGAIN;
+            }
             perror("send");
             return ERROR;
         }

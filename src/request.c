@@ -171,8 +171,9 @@ int handle_pass(connection_t* uc) {
         // keep receiving it and pass to backend. Through we
         // get response from backend directly and 'c->r' is now
         // free for handling next request.
-        if (!r->body_done)
+        if (!r->body_done) {
             connection_enable_in(r->c);
+        }
         connection_disable_out(uc);
     } else if (err == ERROR) {
         // The connection has been closed by peer
@@ -241,8 +242,9 @@ int send_response_file(request_t* r) {
             r->resource_fd = -1;
             return OK;
         } else if (len < 0) {
-            if (errno == EAGAIN)
+            if (errno == EAGAIN) {
                 return AGAIN;
+            }
             ERR_ON(1, "sendfile");
             return ERROR;
         }
@@ -388,8 +390,9 @@ static int request_handle_headers(request_t* r) {
             if (header.offset != -1) {
                 header_processor_t processor = header.processor;
                 int err = processor(r, header.offset);
-                if (err != 0)
+                if (err != 0) {
                     return err;
+                }
             }
         } break;
         default:
@@ -406,11 +409,11 @@ static int header_handle_connection(request_t* r, int offset) {
     header_handle_generic(r, offset);
     request_headers_t* headers = &r->headers;
     if(strncasecmp("keep-alive", headers->connection.data, 10) == 0) {
-      r->keep_alive = true;
+        r->keep_alive = true;
     } else if(strncasecmp("close", headers->connection.data, 5) == 0) {
         r->keep_alive = false;
     } else {
-      return response_build_err(r, 400);
+        return response_build_err(r, 400);
     }
     return OK;
 }
@@ -421,11 +424,11 @@ static int header_handle_t_encoding(request_t* r, int offset) {
     string_t* transfer_encoding = &r->headers.transfer_encoding;
     if (strncasecmp("chunked", transfer_encoding->data, 7) == 0) {
         r->t_encoding = TE_CHUNKED;
-    } else if (strncasecmp("gzip", transfer_encoding->data, 4) == 0
-            || strncasecmp("x-gzip", transfer_encoding->data, 6) == 0) {
+    } else if (strncasecmp("gzip", transfer_encoding->data, 4) == 0 ||
+               strncasecmp("x-gzip", transfer_encoding->data, 6) == 0) {
         r->t_encoding = TE_GZIP;            
-    } else if (strncasecmp("compress", transfer_encoding->data, 8) == 0
-            || strncasecmp("x-compress", transfer_encoding->data, 10) == 0) {
+    } else if (strncasecmp("compress", transfer_encoding->data, 8) == 0 ||
+               strncasecmp("x-compress", transfer_encoding->data, 10) == 0) {
         r->t_encoding = TE_COMPRESS;            
     } else if (strncasecmp("deflate", transfer_encoding->data, 7) == 0) {
         r->t_encoding = TE_DEFLATE;

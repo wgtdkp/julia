@@ -32,8 +32,9 @@ static inline int buffer_size(buffer_t* buffer) {
 }
 
 static inline int buffer_append_u8(buffer_t* buffer, uint8_t val) {
-    if (buffer->limit <= buffer->end)
+    if (buffer->limit <= buffer->end) {
         return 0;
+    }
     *buffer->end++ = val;
     return 1;
 }

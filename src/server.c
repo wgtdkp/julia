@@ -75,7 +75,6 @@ static int startup(uint16_t port) {
     if (bind(listen_fd, (struct sockaddr*)&server_addr, addr_len) < 0) {
         return ERROR;
     }
-
     if (listen(listen_fd, 1024) < 0) {
         return ERROR;
     }
@@ -123,19 +122,15 @@ int main(int argc, char* argv[]) {
     }
 
     get_pid();
-
     if (config_load(&server_cfg) != OK) {
         raise(SIGINT);
     }
-
     if (server_cfg.debug) {
         goto work;
     }
-
     if (server_cfg.daemon) {
         daemon(1, 0);
     }
-
     if (get_pid() != 0) {
         ju_error("julia has already been running...");
         exit(ERROR);
@@ -147,15 +142,17 @@ int main(int argc, char* argv[]) {
         if (nworker >= server_cfg.workers.size) {
             int stat;
             wait(&stat);
-            if (WIFEXITED(stat))
+            if (WIFEXITED(stat)) {
                 raise(SIGINT);
+            }
             // Worker unexpectly exited, restart it
             ju_log("julia failed, restarting...");
         }
         int pid = fork();
         ABORT_ON(pid < 0, "fork");
-        if (pid == 0)
+        if (pid == 0) {
             break;
+        }
         int* worker = vector_at(&server_cfg.workers, nworker++);
         *worker = pid;
     }

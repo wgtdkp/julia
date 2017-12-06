@@ -47,16 +47,18 @@ static inline int queue_empty(queue_t* queue) {
 static inline void* queue_front(queue_t* queue) {
     list_t* list = &queue->container;
     list_node_t* head = list_head(list);
-    if (head == NULL)
+    if (head == NULL) {
         return NULL;
+    }
     return &head->data;
 }
 
 static inline void* queue_back(queue_t* queue) {
     list_t* list = &queue->container;
     list_node_t* tail = list_tail(list);
-    if (tail == &list->dummy)
+    if (tail == &list->dummy) {
         return NULL;
+    }
     return &tail->data;
 }
 

@@ -7,12 +7,14 @@ int gen(char* str, int base, int mul)
     unsigned int hash = 0;
     for (char* p = str; *p != 0 && *p != ' '; ++p) {
         char ch = *p;
-        if (ch >= 'A' && ch <= 'Z')
+        if (ch >= 'A' && ch <= 'Z') {
             ch += 'a' - 'A';
-        if ('-' == ch)
+        }
+        if ('-' == ch) {
             ch = '-';
-        else 
+        } else {
             ch -= 'a';
+        }
         hash = hash * mul + ch;
         //if (hash > 0x00ffffff)
         //    hash %= base;
@@ -29,8 +31,9 @@ int main(void)
             freopen("headers.txt", "r", stdin);
             char str[100] = {0};
             int table[100];
-            for (int k = 0; k < 100; ++k)
+            for (int k = 0; k < 100; ++k) {
                 table[k] = -1;
+            }
             int i = 0;
             while (scanf("%s", str) != EOF) {
                 int hash = gen(str, 131, 3);
@@ -39,8 +42,9 @@ int main(void)
             }
             for (i = 0; i < 100; ++i) {
                 for (int j = i + 1; j < 100; ++j) {
-                    if (table[i] != -1 && table[i] == table[j])
+                    if (table[i] != -1 && table[i] == table[j]) {
                         printf("collision: %d, %d: %d\n", i, j, table[i]);
+                    }
                 }
             }
             //printf("%d: %d\n", primers[n], mul);

@@ -147,11 +147,13 @@ int uwsgi_open_connection(request_t* r, location_t* loc) {
     addr.sin_family = AF_INET;
     addr.sin_port = htons(loc->port);
     int success = inet_pton(AF_INET, loc->host.data, &addr.sin_addr);
-    if (success <= 0) return -1;
-    
+    if (success <= 0) {
+      return -1;
+    }
     int err = connect(fd, (struct sockaddr*)&addr, sizeof(addr));
-    if (err < 0) return -1;
-
+    if (err < 0) {
+      return -1;
+    }
     r->uc = pool_alloc(&connection_pool);
     connection_register(r->uc);
     r->uc->active_time = time(NULL);

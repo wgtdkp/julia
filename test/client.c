@@ -67,8 +67,9 @@ int my_send(int fd, const char* format, ...)
 
 int main(int argc, char* argv[])
 {
-    if (argc < 3)
+    if (argc < 3) {
         return 0;
+    }
     int fd = startup(atoi(argv[1]));
     
     FILE* file = fopen(argv[2], "r");
@@ -78,8 +79,9 @@ int main(int argc, char* argv[])
     }
     for (; ;) {
         int ch = getc(file);
-        if (ch == EOF)
+        if (ch == EOF) {
             break;
+        }
         assert(1 == send(fd, &ch, 1, 0));
         printf("%c", ch);
         fflush(stdout);
@@ -89,8 +91,9 @@ int main(int argc, char* argv[])
     for (; ;) {
         int ch;
         int len = recv(fd, &ch, 1, 0);
-        if (len != 1)
+        if (len != 1) {
             break;
+        }
         printf("%c", ch);
         fflush(stdout);
     }

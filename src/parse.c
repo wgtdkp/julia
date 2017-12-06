@@ -13,8 +13,9 @@
 #define STR7_EQ(p, q)   (STR3_EQ(p, q) && STR4_EQ(p + 3, q + 3))
 
 #define PARSE_ERR_ON(cond, err) {   \
-    if (cond)                       \
+    if (cond) {                     \
         return (err);               \
+    }                               \
 };
 
 static vector_t header_values;
@@ -34,40 +35,45 @@ static inline int parse_method(char* begin, char* end) {
     int len = end - begin;
     switch (len) {
     case 3:
-        if (STR3_EQ(begin, "GET"))
+        if (STR3_EQ(begin, "GET")) {
             return M_GET;
-        else if(STR3_EQ(begin, "PUT"))
+        } else if(STR3_EQ(begin, "PUT")) {
             return M_PUT;
-        else
+        } else {
             return ERR_INVALID_METHOD;
+        }
         break;
     case 4:
-        if (STR4_EQ(begin, "POST"))
+        if (STR4_EQ(begin, "POST")) {
             return M_POST;
-        else if (STR4_EQ(begin, "HEAD"))
+        } else if (STR4_EQ(begin, "HEAD")) {
             return M_HEAD;
-        else
+        } else {
             return ERR_INVALID_METHOD;
+        }
         break;
     case 5:
-        if (STR5_EQ(begin, "TRACE"))
+        if (STR5_EQ(begin, "TRACE")) {
             return M_TRACE;
-        else
+        } else {
             return ERR_INVALID_METHOD;
+        }
         break;
     case 6:
-        if (STR6_EQ(begin, "DELETE"))
+        if (STR6_EQ(begin, "DELETE")) {
             return M_DELETE;
-        else
+        } else {
             return ERR_INVALID_METHOD;
+        }
         break;
     case 7:
-        if (STR7_EQ(begin, "CONNECT"))
+        if (STR7_EQ(begin, "CONNECT")) {
             return M_CONNECT;
-        else if (STR7_EQ(begin, "OPTIONS"))
+        } else if (STR7_EQ(begin, "OPTIONS")) {
             return M_OPTIONS;
-        else
+        } else {
             return ERR_INVALID_METHOD;
+        }
         break;
     default:
         return ERR_INVALID_METHOD;
@@ -100,8 +106,9 @@ int parse_request_line(request_t* r) {
                 break;
             case ' ':
                 r->method = parse_method(r->request_line.data, p);
-                if (r->method == ERR_INVALID_METHOD)
+                if (r->method == ERR_INVALID_METHOD) {
                     return r->method;
+                }
                 r->state = RL_S_SP_BEFORE_URI;
                 break;
             }
@@ -117,8 +124,9 @@ int parse_request_line(request_t* r) {
                 break;
             default:
                 r->uri.state = URI_S_BEGIN;
-                if ((uri_err = parse_uri(&r->uri, p)) != OK)
+                if ((uri_err = parse_uri(&r->uri, p)) != OK) {
                     return uri_err;
+                }
                 r->state = RL_S_URI;
                 break;
             }
@@ -134,8 +142,9 @@ int parse_request_line(request_t* r) {
                 r->state = RL_S_SP_BEFORE_VERSION;
                 // Fall through
             default: 
-                if ((uri_err = parse_uri(&r->uri, p)) != OK)
+                if ((uri_err = parse_uri(&r->uri, p)) != OK) {
                     return uri_err;
+                }
                 if (ch == ' ') {
                     if (r->uri.nentries < r->uri.nddots) {
                         r->uri.abs_path.len = 1;        
@@ -538,8 +547,9 @@ static int parse_uri(uri_t* uri, char* p) {
     case URI_S_EXTENSION:
         switch (ch) {
         case ' ':
-            if (uri->nentries >= uri->nddots)
+            if (uri->nentries >= uri->nddots) {
                 ++uri->nentries;
+            }
             ++uri->extension.data;
             uri->extension.len = p - uri->extension.data;
             
@@ -550,14 +560,16 @@ static int parse_uri(uri_t* uri, char* p) {
             uri->extension.data = p;
             break;
         case '/':
-            if (uri->nentries >= uri->nddots)
+            if (uri->nentries >= uri->nddots) {
                 ++uri->nentries;
+            }
             uri->extension.data = NULL;
             uri->state = URI_S_ABS_PATH_SLASH;
             break;
         case '?':
-            if (uri->nentries >= uri->nddots)
+            if (uri->nentries >= uri->nddots) {
                 ++uri->nentries;
+            }
             ++uri->extension.data;
             uri->extension.len = p - uri->extension.data;
             
@@ -756,8 +768,9 @@ void parse_header_host(request_t* r) {
     string_t* host = &r->headers.host;
     char* semicolon = NULL;
     for (int i = 0; i < host->len; ++i) {
-        if (host->data[i] == ':')
+        if (host->data[i] == ':') {
             semicolon = &host->data[i];
+        }
     }
     
     if (semicolon == NULL) {
@@ -780,12 +793,14 @@ static void split_header_value(string_t* val, char split, vector_t* vec) {
     char* end = val->data + val->len;
     for (char* p = val->data; p < end; ++p) {
         if (*p == ' ') {
-            if (cur != NULL)
+            if (cur != NULL) {
                 cur->len = p - cur->data;
+            }
         } else if (*p == split) {
             if (cur != NULL) {
-                if (cur->len == 0)
+                if (cur->len == 0) {
                     cur->len = p - cur->data;
+                }
                 cur = NULL;
             }
         } else if (cur == NULL) {
@@ -796,8 +811,9 @@ static void split_header_value(string_t* val, char split, vector_t* vec) {
             cur->len = 0;
         }
     }
-    if (cur != NULL)
+    if (cur != NULL) {
         cur->len = end - cur->data;
+    }
 }
 
 int parse_header_accept(request_t* r) {
@@ -809,8 +825,9 @@ int parse_header_accept(request_t* r) {
         string_t* val = vector_at(&header_values, i);
 
         split_header_value(val, ';', &header_value_params);
-        if (header_value_params.size == 0)
+        if (header_value_params.size == 0) {
             continue;   // Bad format
+        }
         
         string_t* type = vector_at(&header_value_params, 0);
         char* slash = string_find(type, '/');

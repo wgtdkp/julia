@@ -102,12 +102,13 @@ int config_load(config_t* cfg) {
             loc->port = juson_array_get(pass_val, 1)->ival;
             string_t protocol =
                     juson_val2str(juson_object_get(loc_cfg_val, "protocol"));
-            if (string_eq(&protocol, &STRING("http")))
+            if (string_eq(&protocol, &STRING("http"))) {
                 loc->protocol = PROT_HTTP;
-            else if (string_eq(&protocol, &STRING("fcgi")))
+            } else if (string_eq(&protocol, &STRING("fcgi"))) {
                 loc->protocol = PROT_FCGI;
-            else
+            } else {
                 loc->protocol = PROT_UWSGI; // Default
+            }
         } else {
             loc->pass = false;
         }

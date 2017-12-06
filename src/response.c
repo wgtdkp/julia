@@ -368,7 +368,7 @@ int response_build_err(request_t* r, int err) {
     char* page = err_page(r->status, &page_len);
     if (page != NULL) {
         buffer_print(b, "Content-Length: %d" CRLF,
-                page_len + page_tail_len);
+                     page_len + page_tail_len);
     }
     
     buffer_append_cstring(b, CRLF);

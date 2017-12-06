@@ -48,10 +48,12 @@ connection_t* uwsgi_open_connection(request_t* r, location_t* loc) {
     bzero(&addr, sizeof(addr));
     addr.sin_family = AF_INET;
     addr.sin_port = htons(loc->port);
-    if (inet_pton(AF_INET, loc->host.data, &addr.sin_addr) <= 0)
+    if (inet_pton(AF_INET, loc->host.data, &addr.sin_addr) <= 0) {
         return NULL;
-    if (connect(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0)
+    }
+    if (connect(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
         return NULL;
+    }
     
     connection_t* c = pool_alloc(&connection_pool);
     c->active_time = time(NULL);
@@ -114,8 +116,9 @@ static void heap_shift_up(int idx) {
     connection_t* c = connections[k];
     while (P(k) > 0) {
         connection_t* pc = connections[P(k)];
-        if (c->active_time >= pc->active_time)
+        if (c->active_time >= pc->active_time) {
             break;
+        }
         connections[k] = pc;
         connections[k]->heap_idx = k;
         k = P(k);
@@ -148,17 +151,19 @@ static void heap_shift_down(int idx) {
 void connection_activate(connection_t* c) {
     c->active_time = time(NULL);
     heap_shift_down(c->heap_idx);
-    if (c->side == C_SIDE_FRONT && c->r->uc)
+    if (c->side == C_SIDE_FRONT && c->r->uc) {
         connection_activate(c->r->uc);
+    }
 }
 
 void connection_expire(connection_t* c) {
     c->active_time = time(NULL) - server_cfg.timeout - 1;
     heap_shift_up(c->heap_idx);
-    if (c->side == C_SIDE_FRONT && c->r->uc)
+    if (c->side == C_SIDE_FRONT && c->r->uc) {
         connection_expire(c->r->uc);
-    else if (c->side == C_SIDE_BACK)
+    } else if (c->side == C_SIDE_BACK) {
         c->r->uc = NULL;
+    }
 }
 
 bool connection_is_expired(connection_t* c) {
@@ -167,8 +172,9 @@ bool connection_is_expired(connection_t* c) {
 
 // Return: 0, success; -1, fail;
 int connection_register(connection_t* c) {
-    if (heap_size + 1 > MAX_CONNECTION)
+    if (heap_size + 1 > MAX_CONNECTION) {
       return -1;
+    }
     connections[++heap_size] = c;
     heap_shift_up(heap_size);
     return 0;

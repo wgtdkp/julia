@@ -25,8 +25,9 @@ void* pool_alloc(pool_t* pool);
 void pool_clear(pool_t* pool);
 
 static inline void pool_free(pool_t* pool, void* x) {
-    if (x == NULL)
+    if (x == NULL) {
         return;
+    }
     --pool->nallocated;
     ((chunk_slot_t*)x)->next = pool->cur;
     pool->cur = x;
