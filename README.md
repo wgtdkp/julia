@@ -2,7 +2,7 @@
 [nginx]: https://nginx.org/
 [lighttpd]: https://www.lighttpd.net/
 
-# julia [![Build Status](https://travis-ci.org/wgtdkp/julia.svg?branch=master)](https://travis-ci.org/wgtdkp/julia)
+# julia [![Build Status](https://travis-ci.org/wgtdkp/julia.svg?branch=master)](https://travis-ci.org/wgtdkp/julia)  <a href="https://996.icu"><img src="https://img.shields.io/badge/link-996.icu-red.svg"></a>
 
 [中文](#中文)
 
